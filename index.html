@@ -1,477 +1,250 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Recruit Team Dashboard</title>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --p:#7F77DD;--pl:#EEEDFE;--pd:#3C3489;
-  --t:#1D9E75;--tl:#E1F5EE;--td:#085041;
-  --a:#BA7517;--al:#FAEEDA;--ad:#633806;
-  --c:#D85A30;--cl:#FAECE7;--cd:#4A1B0C;
-  --g:#888780;--gl:#F1EFE8;--gd:#444441;
-  --gn:#639922;--gnl:#EAF3DE;--gnd:#27500A;
-  --bg:#F7F6F3;--surf:#FFFFFF;
-  --bdr:rgba(0,0,0,.09);--text:#1A1A1A;--muted:#6B6A66;
-  --r:10px;--rs:6px;
-  font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;
-}
-body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+// ═══════════════════════════════════════════════════
+//  Recruit Dashboard — Google Apps Script API
+//  貼到 Apps Script 後，部署為 Web App
+//  執行身分：我（你的 Google 帳號）
+//  存取權限：任何人
+// ═══════════════════════════════════════════════════
 
+const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID'; // ← 換成你的 Sheet ID（網址列中間那串）
 
+// ── 允許 CORS，讓前端 Dashboard 可以呼叫 ──
+function doGet(e) {
+  const action = e.parameter.action;
+  let result;
 
-/* ── APP ── */
-#app{display:none;min-height:100vh}
-.topbar{background:var(--surf);border-bottom:.5px solid var(--bdr);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
-.tlogo{font-size:15px;font-weight:600;color:var(--pd)}
-.tenv{font-size:10px;padding:2px 8px;border-radius:100px;background:var(--gl);color:var(--gd);font-weight:500;margin-left:10px}
-.tenv.live{background:var(--tl);color:var(--td)}
-.upill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding:4px 10px;border-radius:100px;border:.5px solid var(--bdr);background:var(--bg)}
-.udot{width:8px;height:8px;border-radius:50%}
+  try {
+    if (action === 'getTasks')      result = getTasks(e.parameter);
+    else if (action === 'getOKR')   result = getOKR(e.parameter);
+    else if (action === 'getVac')   result = getVacancies();
+    else if (action === 'getAll')   result = getAllData();
+    else result = { error: 'Unknown action' };
+  } catch (err) {
+    result = { error: err.message };
+  }
 
-.switchbtn:hover{background:var(--gl)}
-
-/* ── LAYOUT ── */
-.main{display:flex;height:calc(100vh - 52px)}
-.sidebar{width:196px;flex-shrink:0;background:var(--surf);border-right:.5px solid var(--bdr);padding:14px 0;overflow-y:auto}
-.slbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:8px 16px 4px}
-.nitem{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--rs);cursor:pointer;font-size:13px;color:var(--muted);width:calc(100% - 12px);margin:0 6px;background:none;border:none;text-align:left}
-.nitem:hover{background:var(--bg);color:var(--text)}
-.nitem.on{background:var(--pl);color:var(--pd);font-weight:500}
-.nnum{font-size:10px;opacity:.55}
-.ndiv{height:.5px;background:var(--bdr);margin:8px 14px}
-.content{flex:1;overflow-y:auto;padding:24px}
-.tp{display:none}.tp.on{display:block}
-@media(max-width:640px){.sidebar{display:none}}
-
-/* ── COMPONENTS ── */
-.phead{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.ptitle{font-size:17px;font-weight:600}
-.psub{font-size:12px;color:var(--muted);margin-top:2px}
-.card{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
-.mc{background:var(--bg);border-radius:var(--rs);padding:12px 14px}
-.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
-.ml{font-size:11px;color:var(--muted);margin-bottom:3px}
-.mv{font-size:22px;font-weight:600}
-.ms{font-size:10px;color:var(--muted);margin-top:2px}
-.sec{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px}
-.bdg{display:inline-block;font-size:10px;font-weight:500;padding:2px 7px;border-radius:100px}
-.bp{background:var(--pl);color:var(--pd)}.bt{background:var(--tl);color:var(--td)}
-.ba{background:var(--al);color:var(--ad)}.bc{background:var(--cl);color:var(--cd)}
-.bg2{background:var(--gl);color:var(--gd)}.bn{background:var(--gnl);color:var(--gnd)}
-.hp-best{background:var(--tl);color:var(--td)}.hp-good{background:var(--gnl);color:var(--gnd)}
-.hp-over{background:var(--cl);color:var(--cd)}.hp-na{background:var(--gl);color:var(--gd)}
-.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;font-size:12px;font-weight:500;border:.5px solid var(--bdr);border-radius:var(--rs);background:none;color:var(--text);cursor:pointer}
-.btn:hover{background:var(--bg)}.btp{background:var(--p);color:#fff;border-color:var(--p)}.btp:hover{background:var(--pd)}
-.bts{padding:4px 10px;font-size:11px}
-.ic{background:none;border:.5px solid var(--bdr);border-radius:4px;padding:4px 6px;font-size:12px;color:var(--text);width:100%;font-family:inherit}
-.ic:focus{outline:none;border-color:var(--p);background:#fff}
-select.ic{cursor:pointer}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th{text-align:left;font-size:10px;font-weight:600;color:var(--muted);padding:6px 8px;border-bottom:.5px solid var(--bdr);white-space:nowrap}
-td{padding:7px 8px;border-bottom:.5px solid rgba(0,0,0,.04);vertical-align:middle}
-tr:last-child td{border-bottom:none}
-.warn-row{background:rgba(216,90,48,.04)}
-.pw{width:100%;background:var(--bg);border-radius:100px}.pb{border-radius:100px}
-.mchips{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
-.mchip{padding:5px 14px;border-radius:100px;font-size:12px;font-weight:500;border:.5px solid var(--bdr);cursor:pointer;background:none;color:var(--muted)}
-.mchip.on{background:var(--p);color:#fff;border-color:var(--p)}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:580px){.two{grid-template-columns:1fr}}
-.cbr{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px}
-.cbl{width:68px;color:var(--muted);text-align:right;flex-shrink:0;font-size:11px}
-.cbt{flex:1;background:var(--bg);border-radius:100px;height:12px;overflow:hidden}
-.cbf{height:12px;border-radius:100px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-size:9px;font-weight:600;color:#fff;min-width:20px}
-.obj-block{border:.5px solid var(--bdr);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
-.obj-hd{background:var(--pl);padding:10px 14px;display:flex;align-items:center;gap:8px}
-.obj-lbl{font-size:10px;font-weight:600;color:var(--pd);background:#fff;padding:2px 8px;border-radius:100px;flex-shrink:0}
-.obj-bd{padding:12px 14px}
-.kr-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;padding-bottom:12px;border-bottom:.5px solid rgba(0,0,0,.05)}
-.kr-row:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
-.kr-lbl{font-size:10px;font-weight:600;color:var(--a);background:var(--al);padding:2px 8px;border-radius:100px;white-space:nowrap;flex-shrink:0;margin-top:2px}
-.kr-ct{flex:1}
-.kr-tasks{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-.kr-chip{font-size:10px;background:var(--bg);border:.5px solid var(--bdr);border-radius:4px;padding:2px 8px;color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:4px}
-.kr-chip:hover{background:var(--pl);color:var(--pd);border-color:var(--p)}
-.addkr{font-size:10px;color:var(--p);background:none;border:.5px dashed var(--p);border-radius:4px;padding:2px 8px;cursor:pointer}
-.delbtn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:1px 5px;border-radius:4px}
-.delbtn:hover{color:var(--c);background:var(--cl)}
-.lock-pill{display:inline-flex;align-items:center;gap:3px;font-size:9px;color:var(--muted);background:var(--bg);border:.5px solid var(--bdr);border-radius:100px;padding:1px 5px}
-.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(188px,1fr));gap:10px;margin-top:10px}
-.vcard{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:13px 15px;cursor:pointer;transition:border-color .12s}
-.vcard:hover{border-color:var(--p)}
-.pbar{position:relative;height:10px;background:var(--bg);border-radius:100px;margin:8px 0 4px}
-.pfill{height:10px;border-radius:100px}
-.pmark{position:absolute;top:-3px;width:2px;height:16px;background:var(--a);border-radius:1px}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:200}
-.overlay.open{display:flex}
-.modal{background:var(--surf);border-radius:14px;padding:22px;width:min(560px,94vw);max-height:85vh;overflow-y:auto;border:.5px solid var(--bdr);box-shadow:0 8px 40px rgba(0,0,0,.12)}
-.mhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.mtitle{font-size:15px;font-weight:600}
-.xbtn{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px}
-.xbtn:hover{background:var(--bg)}
-.cfg-row{margin-bottom:14px}
-.cfg-row label{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-bottom:5px}
-.cfg-note{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.6}
-.toast{position:fixed;bottom:24px;right:24px;z-index:300;background:var(--text);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
-.toast.show{opacity:1}.toast.err{background:var(--c)}
-#banner{background:var(--al);border-bottom:1px solid rgba(186,117,23,.2);padding:9px 24px;font-size:12px;color:var(--ad);display:none;align-items:center;gap:8px}
-#banner button{margin-left:auto;font-size:11px;padding:4px 10px;background:var(--a);color:#fff;border:none;border-radius:4px;cursor:pointer}
-</style>
-</head>
-<body>
-
-    <div class="who-title">Recruit Team Dashboard</div>
-    <div class="who-sub">你是誰？點一下直接進入</div>
-    <div class="who-grid" id="who-grid"></div>
-  </div>
-</div>
-
-<!-- ── APP ── -->
-<div id="app">
-  <div id="banner">⚠ 尚未連線 Google Sheets，目前為 Demo 模式（資料不會儲存）。<button onclick="openCfg()">立即設定</button></div>
-  <div class="topbar">
-    <div style="display:flex;align-items:center">
-      <div class="tlogo">📋 Recruit Dashboard</div>
-      <div class="tenv" id="tenv">Demo</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span id="uname"></span></div>
-      <button class="btn bts" onclick="openCfg()">⚙ 設定</button>
-      
-    </div>
-  </div>
-  <div class="main">
-    <nav class="sidebar">
-      <div class="slbl">分頁</div>
-      <button class="nitem on" onclick="showTab('okr',this)"><span class="nnum">①</span> Team OKR</button>
-      <button class="nitem" onclick="showTab('mbp',this)"><span class="nnum">②</span> Member Blueprint</button>
-      <button class="nitem" onclick="showTab('tasks',this)"><span class="nnum">③</span> 任務工時</button>
-      <button class="nitem" onclick="showTab('dash',this)"><span class="nnum">④</span> 週/月 Dashboard</button>
-      <button class="nitem" onclick="showTab('perf',this)"><span class="nnum">⑤</span> 績效評核</button>
-      <div class="ndiv"></div>
-      <button class="nitem" onclick="loadData()" style="color:var(--p)">↻ 重新載入資料</button>
-    </nav>
-    <div class="content">
-      <!-- ① OKR -->
-      <div id="tab-okr" class="tp on">
-        <div class="phead">
-          <div><div class="ptitle">Team OKR</div><div class="psub">點任務指標 chip 查看 / 編輯說明</div></div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select class="ic" style="width:78px" id="okr-q" onchange="renderOKR()"><option>Q1</option><option>Q2</option><option selected>Q3</option><option>Q4</option></select>
-            <button class="btn btp" onclick="addObj()">＋ Objective</button>
-          </div>
-        </div>
-        <div id="okr-body"></div>
-        <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btp" onclick="saveOKR()">↑ 儲存至 Sheets</button></div>
-      </div>
-      <!-- ② Member Blueprint -->
-      <div id="tab-mbp" class="tp">
-        <div class="phead"><div class="ptitle">Member Blueprint</div></div>
-        <div class="mchips" id="mbp-chips"></div>
-        <div id="mbp-body"></div>
-      </div>
-      <!-- ③ Tasks -->
-      <div id="tab-tasks" class="tp">
-        <div class="phead">
-          <div><div class="ptitle">任務工時</div><div class="psub">狀態「完成」→ 完成度自動鎖 100%；「未開始」→ 鎖 0%</div></div>
-          <button class="btn btp" onclick="addTask()">＋ 新增任務</button>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;font-size:10px;color:var(--muted)">
-          工時表現：<span class="bdg hp-best">⚡ 提前完成</span> 實際 &lt; 預估且完成 100%
-          <span class="bdg hp-good">✓ 準時完成</span> 實際 ≤ 預估且完成 100%
-          <span class="bdg hp-over">⚠ 超支</span> 實際 &gt; 預估且未完成
-        </div>
-        <div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto">
-          <table style="min-width:740px">
-            <thead><tr>
-              <th style="width:120px">任務名稱</th><th style="width:56px">負責人</th><th style="width:108px">所屬 KR</th>
-              <th style="width:46px">難易度</th><th style="width:52px">預估h</th><th style="width:52px">實際h</th>
-              <th style="width:92px">任務完成度</th><th style="width:84px">工時表現</th>
-              <th style="width:62px">狀態</th><th style="width:116px">修正說明</th><th style="width:28px"></th>
-            </tr></thead>
-            <tbody id="task-body"></tbody>
-          </table>
-        </div></div>
-        <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btp" onclick="saveTasks()">↑ 儲存至 Sheets</button></div>
-      </div>
-      <!-- ④ Dashboard -->
-      <div id="tab-dash" class="tp">
-        <div class="phead">
-          <div class="ptitle">週/月 Dashboard</div>
-          <div style="display:flex;gap:5px">
-            <button class="btn bts" id="dv-w" onclick="setDV(this)" style="background:var(--pl);color:var(--pd);border-color:var(--p)">當週</button>
-            <button class="btn bts" onclick="setDV(this)">本月</button>
-          </div>
-        </div>
-        <div id="dash-body"></div>
-      </div>
-      <!-- ⑤ Perf -->
-      <div id="tab-perf" class="tp">
-        <div class="phead"><div class="ptitle">績效評核</div></div>
-        <div class="mchips" id="perf-chips"></div>
-        <div id="perf-body"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-<div class="overlay" id="modal" onclick="closeMdl(event)">
-  <div class="modal"><div class="mhd"><div class="mtitle" id="mtitle"></div><button class="xbtn" onclick="closeMdl(null)">×</button></div><div id="mbody"></div></div>
-</div>
-<div class="overlay" id="cfg-modal" onclick="if(event.target===this)this.classList.remove('open')">
-  <div class="modal">
-    <div class="mhd"><div class="mtitle">⚙ 連線設定</div><button class="xbtn" onclick="document.getElementById('cfg-modal').classList.remove('open')">×</button></div>
-    <div class="cfg-row"><label>Apps Script Web App URL</label><input class="ic" id="cfg-url" placeholder="https://script.google.com/macros/s/YOUR_ID/exec"><div class="cfg-note">部署 Apps Script 後複製的 URL</div></div>
-    <div class="cfg-row"><label>Write Token</label><input class="ic" id="cfg-tok" type="password" placeholder="Settings 表中 write_token 的值"></div>
-    <button class="btn btp" style="width:100%;margin-top:4px" onclick="saveCfg()">儲存並重新整理</button>
-    <div class="cfg-note" style="margin-top:12px;padding:10px;background:var(--al);border-radius:6px;color:var(--ad)">
-      📋 Settings 表需包含：write_token / 你的密碼 ｜ promote_threshold / 70
-    </div>
-  </div>
-</div>
-
-<script>
-const CFG_KEY='recruit_cfg_v3';
-let cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'{}');
-const isLive=()=>!!(cfg.apiUrl&&cfg.token);
-let activeMbp=0,activePerf=0,okrLocal={},pendingTasks={};
-
-const DEMO_MEMBERS=[{name:'Ava',color:'#7F77DD'},{name:'Ben',color:'#1D9E75'},{name:'Cleo',color:'#D85A30'}];
-const DEMO_SETTINGS={write_token:'demo',promote_threshold:'70'};
-let S={tasks:[],okr:[],vacancies:[],members:DEMO_MEMBERS,settings:DEMO_SETTINGS,demo:true};
-
-// ── DEMO DATA ──
-function getDemoTasks(){return[
-  {task_id:'T1',task_name:'Backend JD 撰寫',   member:'Ava', kr_ref:'KR1 — JD 模板',   level:'L2',est_hours:3, actual_hours:2.5,completion_pct:100,status:'完成',  note:''},
-  {task_id:'T2',task_name:'LinkedIn 貼文排程', member:'Ben', kr_ref:'KR2 — 管道拓展',  level:'L1',est_hours:1, actual_hours:1,  completion_pct:100,status:'完成',  note:''},
-  {task_id:'T3',task_name:'PM 面試安排',       member:'Cleo',kr_ref:'KR1 — TTH 縮短',  level:'L2',est_hours:4, actual_hours:3,  completion_pct:80, status:'進行中',note:''},
-  {task_id:'T4',task_name:'Offer Letter 草稿', member:'Ava', kr_ref:'KR2 — Offer Rate', level:'L1',est_hours:2, actual_hours:2.8,completion_pct:60, status:'進行中',note:'範本來回修改超出預期'},
-  {task_id:'T5',task_name:'薪資 Benchmark',    member:'Ben', kr_ref:'KR2 — Offer Rate', level:'L3',est_hours:8, actual_hours:9,  completion_pct:50, status:'進行中',note:'數據來源比預估複雜'},
-  {task_id:'T6',task_name:'Talent Pool 建立',  member:'Cleo',kr_ref:'KR1 — Talent Pool',level:'L3',est_hours:10,actual_hours:0,  completion_pct:0,  status:'未開始',note:''},
-  {task_id:'T7',task_name:'面試官培訓簡報',   member:'Ava', kr_ref:'KR1 — TTH 縮短',  level:'L2',est_hours:5, actual_hours:4.5,completion_pct:100,status:'完成',  note:''},
-  {task_id:'T8',task_name:'社群招募文案',     member:'Ben', kr_ref:'KR2 — 管道拓展',  level:'L2',est_hours:3, actual_hours:3.5,completion_pct:55, status:'進行中',note:'草稿完成，等 review'},
-];}
-function getDemoVac(){return[
-  {vac_id:'V1',role:'後端工程師',func:'Engineering',level:'Senior',hc:2,owner:'Ava', candidates:'王小明、陳美如',status:'面試中'},
-  {vac_id:'V2',role:'產品經理',  func:'Product',    level:'Mid',   hc:1,owner:'Cleo',candidates:'林志遠',      status:'Offer 談判'},
-  {vac_id:'V3',role:'資料分析師',func:'Data',       level:'Junior',hc:1,owner:'Ben', candidates:'—',          status:'Sourcing'},
-  {vac_id:'V4',role:'UX 設計師', func:'Design',     level:'Mid',   hc:1,owner:'Ben', candidates:'張曉芸',     status:'初篩'},
-  {vac_id:'V5',role:'行銷專員',  func:'Marketing',  level:'Junior',hc:2,owner:'Cleo',candidates:'—',          status:'JD 準備'},
-];}
-function getDemoOKRForQ(q){
-  const m={Q1:[{o:'建立招募流程標準化基礎',kr:[{label:'KR1',text:'完成全部職位 JD 模板，覆蓋率 100%',pct:100,tasks:[{name:'Backend JD',desc:'撰寫後端工程師標準 JD，含職責/技術棧/薪資範圍，需通過 HM review。'},{name:'Frontend JD',desc:'含 React 技術要求、作品集規範。'}]},{label:'KR2',text:'面試流程 SOP 文件化',pct:80,tasks:[{name:'SOP 撰寫',desc:'涵蓋投遞→初篩→面試→Offer 全流程。'},{name:'Team Review',desc:'team 內部 walkthrough，finalize 版本。'}]}]}],Q2:[{o:'縮短 TTH，提升候選人體驗',kr:[{label:'KR1',text:'TTH 從 45 天縮短至 30 天',pct:60,tasks:[{name:'流程瓶頸分析',desc:'分析過去 3 個月數據，找出 TTH 卡關點。'},{name:'面試官培訓',desc:'針對 HM 進行結構化面試培訓。'}]},{label:'KR2',text:'Offer Acceptance Rate ≥ 85%',pct:40,tasks:[{name:'Offer 模板優化',desc:'更新 Offer letter 格式。'},{name:'薪資 Benchmark',desc:'調研同業薪資（至少 5 家）。'}]},{label:'KR3',text:'候選人 NPS ≥ 70',pct:20,tasks:[{name:'面試體驗問卷',desc:'5 題問卷，Offer 後 24h 寄出。'}]}]}],Q3:[{o:'拓展被動求才管道，建立 Talent Pool',kr:[{label:'KR1',text:'Talent Pool 人數達 50 人',pct:30,tasks:[{name:'LinkedIn Sourcing',desc:'每週 Outreach 10 人，月底彙整入 ATS。'},{name:'社群觸及',desc:'每月 2 篇雇主品牌內容。'}]},{label:'KR2',text:'建立 2 個新招募管道',pct:10,tasks:[{name:'管道調研',desc:'評估獵頭/校園/內推，產出評估報告。'},{name:'合作洽談',desc:'完成 1 家獵頭合約 + 1 所大學實習合作。'}]}]}],Q4:[{o:'完成年度 Headcount 計畫與 OKR 回顧',kr:[{label:'KR1',text:'年度 HC 達成率 ≥ 90%',pct:0,tasks:[{name:'Q4 招募衝刺',desc:'鎖定未完成職缺，制定攻堅計畫。'},{name:'HC tracking',desc:'每週更新 HC 追蹤表，即時 flag 風險。'}]},{label:'KR2',text:'全年 OKR 回顧報告完成',pct:0,tasks:[{name:'數據彙整',desc:'整合全年數據。'},{name:'報告產出',desc:'製作年度招募成果 deck。'}]}]}]};
-  return m[q]||[];
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── WHO SCREEN ──
-window.addEventListener('load',async()=>{
-  if(isLive()){try{const d=await apiGet({action:'getAll'});if(d&&!d.error){S.members=d.members||DEMO_MEMBERS;S.settings=d.settings||DEMO_SETTINGS;S.demo=false;}}catch(e){}}
-  enterApp();
-});
+function doPost(e) {
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return jsonResponse({ error: 'Invalid JSON' });
+  }
 
-function enterApp(){
-  document.getElementById('app').style.display='block';
-  if(S.demo){document.getElementById('banner').style.display='flex';}
-  else{const e=document.getElementById('tenv');e.textContent='已連線 Sheets';e.className='tenv live';}
-  loadData();
+  // ── 權限驗證：只有寫入 token 符合才允許 ──
+  // 在 Settings 表加一列：key=write_token, value=你自己設定的密碼
+  const token = body.token;
+  const settings = getSettings();
+  if (token !== settings['write_token']) {
+    return jsonResponse({ error: 'Unauthorized' });
+  }
+
+  let result;
+  try {
+    const action = body.action;
+    if (action === 'upsertTask')       result = upsertTask(body.data);
+    else if (action === 'deleteTask')  result = deleteTask(body.data.task_id);
+    else if (action === 'upsertVac')   result = upsertVac(body.data);
+    else if (action === 'deleteVac')   result = deleteVac(body.data.vac_id);
+    else if (action === 'updateOKR')   result = updateOKR(body.data);
+    else result = { error: 'Unknown action' };
+  } catch (err) {
+    result = { error: err.message };
+  }
+
+  return jsonResponse(result);
 }
 
-// ── API ──
-async function apiGet(p={}){if(!isLive())return null;const url=new URL(cfg.apiUrl);Object.entries(p).forEach(([k,v])=>url.searchParams.set(k,v));return(await fetch(url.toString())).json();}
-async function apiPost(b){if(!isLive())return null;return(await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({token:cfg.token,...b})})).json();}
-
-async function loadData(){
-  if(!isLive()){S.tasks=getDemoTasks();S.vacancies=getDemoVac();S.demo=true;renderAll();return;}
-  try{const d=await apiGet({action:'getAll'});if(d&&!d.error){S.tasks=d.tasks||[];S.vacancies=d.vacancies||[];S.members=d.members||DEMO_MEMBERS;S.settings=d.settings||DEMO_SETTINGS;S.demo=false;renderAll();showToast('資料已從 Sheets 載入');}else throw 0;}
-  catch(e){S.tasks=getDemoTasks();S.vacancies=getDemoVac();S.demo=true;renderAll();showToast('連線失敗，切換 Demo 模式',true);}
-}
-async function saveTasks(){
-  const pending=Object.values(pendingTasks);
-  if(!pending.length){showToast('沒有待儲存的變更');return;}
-  if(S.demo){showToast('Demo 模式，資料不會儲存');pendingTasks={};return;}
-  let ok=0,fail=0;
-  for(const t of pending){const r=await apiPost({action:'upsertTask',data:{...t}});r?.success?ok++:fail++;}
-  pendingTasks={};showToast(fail?`${ok} 筆成功，${fail} 筆失敗`:`${ok} 筆已儲存至 Sheets`);
-}
-async function saveOKR(){
-  const q=document.getElementById('okr-q').value,rows=buildOKRRows(q);
-  if(S.demo){showToast('Demo 模式，OKR 不會儲存');return;}
-  const r=await apiPost({action:'updateOKR',data:{quarter:q,rows}});
-  showToast(r?.success?`${q} OKR 已儲存至 Sheets`:'儲存失敗');
+function jsonResponse(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── RENDER ──
-function renderAll(){renderOKR();renderTasks();renderMbpChips();renderMbp();renderPerfChips();renderPerf();renderDash();}
-function showTab(id,btn){document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nitem').forEach(b=>b.classList.remove('on'));document.getElementById('tab-'+id).classList.add('on');btn.classList.add('on');}
+// ════════════════════════════════
+//  READ 函式
+// ════════════════════════════════
 
-// ── HELPERS ──
-function hp(t){const p=+t.completion_pct,e=+t.est_hours,a=+t.actual_hours;
-  if(p===100&&a<e)return{code:'best',label:'⚡ 提前完成',cls:'hp-best'};
-  if(p===100&&a<=e)return{code:'good',label:'✓ 準時完成',cls:'hp-good'};
-  if(a>e&&p<100)return{code:'over',label:'⚠ 超支',cls:'hp-over'};
-  return{code:'na',label:'— 進行中',cls:'hp-na'};}
-function hpScore(tasks){const done=tasks.filter(t=>+t.completion_pct===100);if(!done.length)return null;return Math.round(done.map(t=>{const e=+t.est_hours,a=+t.actual_hours;return a<e?100:a===e?90:Math.max(0,Math.round(90-(a-e)/e*100));}).reduce((a,b)=>a+b,0)/done.length);}
-function mcolor(name){const m=S.members.find(m=>m.name===name);return m?m.color:'#888';}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-const LV={L1:'bn',L2:'ba',L3:'bc'},VST={'面試中':'bp','Offer 談判':'bt',Sourcing:'ba',初篩:'bg2','JD 準備':'bc'};
-
-// ── OKR ──
-function getOKRForQ(q){if(okrLocal[q])return okrLocal[q];const rows=S.okr.filter(r=>r.quarter===q),objs=[];rows.forEach(r=>{let o=objs.find(x=>x.o===r.objective);if(!o){o={o:r.objective,kr:[]};objs.push(o);}let k=o.kr.find(x=>x.label===r.kr_label);if(!k){k={label:r.kr_label,text:r.kr_text,pct:+r.kr_pct||0,tasks:[]};o.kr.push(k);}if(r.task_name)k.tasks.push({name:r.task_name,desc:r.task_desc||''});});okrLocal[q]=objs.length?objs:getDemoOKRForQ(q);return okrLocal[q];}
-function buildOKRRows(q){const rows=[];(okrLocal[q]||[]).forEach(o=>o.kr.forEach(k=>{(k.tasks.length?k.tasks:[{name:'',desc:''}]).forEach(t=>{rows.push({quarter:q,objective:o.o,kr_label:k.label,kr_text:k.text,kr_pct:k.pct,task_name:t.name,task_desc:t.desc});});}));return rows;}
-function renderOKR(){
-  const q=document.getElementById('okr-q').value,data=getOKRForQ(q);
-  document.getElementById('okr-body').innerHTML=data.map((obj,oi)=>`
-    <div class="obj-block"><div class="obj-hd"><span class="obj-lbl">Objective</span>
-      <input class="ic" value="${esc(obj.o)}" onchange="okrLocal['${q}'][${oi}].o=this.value" style="background:transparent;border-color:rgba(127,119,221,.3);color:var(--pd);font-weight:600;font-size:13px;flex:1">
-      <button class="delbtn" onclick="okrLocal['${q}'].splice(${oi},1);renderOKR()" style="color:var(--pd)">×</button></div>
-    <div class="obj-bd">${obj.kr.map((kr,ki)=>`
-      <div class="kr-row"><span class="kr-lbl">${kr.label}</span><div class="kr-ct">
-        <input class="ic" value="${esc(kr.text)}" onchange="okrLocal['${q}'][${oi}].kr[${ki}].text=this.value" style="width:100%;margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div style="flex:1">
-          <div style="font-size:9px;color:var(--muted);margin-bottom:2px">${kr.pct}% 達成</div>
-          <div class="pw" style="height:5px"><div class="pb" style="width:${kr.pct}%;height:5px;background:${kr.pct>=80?'var(--t)':kr.pct>=40?'var(--p)':'var(--a)'}"></div></div>
-        </div><input type="number" class="ic" value="${kr.pct}" min="0" max="100" style="width:48px" onchange="okrLocal['${q}'][${oi}].kr[${ki}].pct=Math.min(100,Math.max(0,parseInt(this.value)||0));renderOKR()"></div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:5px">任務指標 <span style="color:var(--p)">（點入查看）</span></div>
-        <div class="kr-tasks">${kr.tasks.map((t,ti)=>`<span class="kr-chip" onclick="openKRTask('${q}',${oi},${ki},${ti})">📄 ${esc(t.name)}</span>`).join('')}
-          <button class="addkr" onclick="okrLocal['${q}'][${oi}].kr[${ki}].tasks.push({name:'新任務指標',desc:''});renderOKR()">＋</button>
-        </div></div>
-        <button class="delbtn" onclick="okrLocal['${q}'][${oi}].kr.splice(${ki},1);renderOKR()">×</button></div>`).join('')}
-      <button class="addkr" style="margin-top:6px" onclick="(()=>{const n=okrLocal['${q}'][${oi}].kr.length+1;okrLocal['${q}'][${oi}].kr.push({label:'KR'+n,text:'',pct:0,tasks:[]});renderOKR();})()">＋ 新增 KR</button>
-    </div></div>`).join('')||'<div style="padding:30px;text-align:center;color:var(--muted)">尚無 Objective，點右上角新增</div>';
-}
-function addObj(){const q=document.getElementById('okr-q').value;if(!okrLocal[q])okrLocal[q]=getOKRForQ(q);okrLocal[q].push({o:'新 Objective',kr:[{label:'KR1',text:'',pct:0,tasks:[]}]});renderOKR();}
-function openKRTask(q,oi,ki,ti){const task=okrLocal[q][oi].kr[ki].tasks[ti],kr=okrLocal[q][oi].kr[ki];openMdl('任務指標說明',`
-  <div style="margin-bottom:12px"><div class="ml" style="margin-bottom:4px">指標名稱</div><input class="ic" style="width:100%;font-size:13px;font-weight:500" value="${esc(task.name)}" onchange="okrLocal['${q}'][${oi}].kr[${ki}].tasks[${ti}].name=this.value"></div>
-  <div style="margin-bottom:16px"><div class="ml" style="margin-bottom:4px">說明細節</div><textarea class="ic" rows="5" style="width:100%;resize:vertical;font-size:12px;line-height:1.6" onchange="okrLocal['${q}'][${oi}].kr[${ki}].tasks[${ti}].desc=this.value">${esc(task.desc)}</textarea><div style="font-size:10px;color:var(--muted);margin-top:4px">可記錄：執行方式、成功標準、注意事項、相關連結。</div></div>
-  <div style="background:var(--pl);border-radius:8px;padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;font-weight:600;color:var(--pd);margin-bottom:4px">所屬 KR</div><div style="font-size:12px;color:var(--pd)">${esc(kr.text)||'（尚未填寫）'}</div><div style="font-size:10px;color:var(--pd);margin-top:4px">達成進度：${kr.pct}%</div></div>
-  <div style="display:flex;justify-content:space-between"><button class="btn" style="color:var(--c);border-color:var(--c)" onclick="okrLocal['${q}'][${oi}].kr[${ki}].tasks.splice(${ti},1);closeMdl(null);renderOKR()">刪除</button><button class="btn btp" onclick="closeMdl(null);renderOKR()">✓ 儲存關閉</button></div>`);}
-
-// ── TASKS ──
-function onStatus(id,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t.status=v;if(v==='完成')t.completion_pct=100;if(v==='未開始')t.completion_pct=0;pendingTasks[id]=t;renderTasks();}
-function onField(id,f,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t[f]=v;pendingTasks[id]=t;}
-function renderTasks(){
-  document.getElementById('task-body').innerHTML=S.tasks.map(t=>{
-    const h=hp(t),p=+t.completion_pct,e=+t.est_hours,a=+t.actual_hours;
-    const locked=t.status==='完成'||t.status==='未開始',over=e>0?Math.round((a-e)/e*100):0;
-    const bc=p===100?'var(--t)':p>=50?'var(--p)':'var(--a)';
-    return`<tr class="${h.code==='over'?'warn-row':''}">
-      <td><input class="ic" value="${esc(t.task_name)}" onchange="onField('${t.task_id}','task_name',this.value)" style="width:110px;font-size:11px"></td>
-      <td><select class="ic" onchange="onField('${t.task_id}','member',this.value)" style="width:48px;font-size:11px">${S.members.map(m=>`<option ${t.member===m.name?'selected':''}>${m.name}</option>`).join('')}</select></td>
-      <td><input class="ic" value="${esc(t.kr_ref||'')}" onchange="onField('${t.task_id}','kr_ref',this.value)" style="width:100px;font-size:11px"></td>
-      <td><select class="ic" onchange="onField('${t.task_id}','level',this.value)" style="width:40px;font-size:11px">${['L1','L2','L3'].map(l=>`<option ${t.level===l?'selected':''}>${l}</option>`).join('')}</select></td>
-      <td><input type="number" class="ic" value="${e}" min="0" step=".5" style="width:44px;font-size:11px" onchange="onField('${t.task_id}','est_hours',parseFloat(this.value)||0);renderTasks()"></td>
-      <td><input type="number" class="ic" value="${a}" min="0" step=".5" style="width:44px;font-size:11px;${h.code==='over'?'border-color:var(--c);color:var(--cd)':''}" onchange="onField('${t.task_id}','actual_hours',parseFloat(this.value)||0);renderTasks()">
-        ${h.code==='over'?`<div style="font-size:9px;color:var(--c)">+${over}%</div>`:''}</td>
-      <td><div style="display:flex;align-items:center;gap:4px;margin-bottom:2px"><span style="font-size:10px;font-weight:500;color:${bc}">${p}%</span>${locked?`<span class="lock-pill">🔒${t.status==='完成'?100:0}</span>`:''}</div>
-        <div class="pw" style="height:5px"><div class="pb" style="width:${p}%;height:5px;background:${bc}"></div></div>
-        ${!locked?`<input type="range" min="0" max="100" value="${p}" step="5" style="width:100%;margin-top:2px" onchange="onField('${t.task_id}','completion_pct',parseInt(this.value));pendingTasks['${t.task_id}']=S.tasks.find(x=>x.task_id==='${t.task_id}');renderTasks()">`:
-        `<div style="font-size:9px;color:var(--muted);margin-top:1px">「${t.status}」鎖定</div>`}</td>
-      <td><span class="bdg ${h.cls}" style="font-size:10px;white-space:nowrap">${h.label}</span></td>
-      <td><select class="ic" onchange="onStatus('${t.task_id}',this.value)" style="width:56px;font-size:11px">${['完成','進行中','未開始'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
-      <td><input class="ic" value="${esc(t.note||'')}" placeholder="${h.code==='over'?'請填寫超支原因…':''}" onchange="onField('${t.task_id}','note',this.value)" style="width:108px;font-size:11px;${h.code==='over'&&!t.note?'border-color:var(--a);background:rgba(186,117,23,.06)':''}"></td>
-      <td><button class="delbtn" onclick="S.tasks=S.tasks.filter(x=>x.task_id!=='${t.task_id}');delete pendingTasks['${t.task_id}'];renderTasks()">×</button></td>
-    </tr>`;}).join('')||'<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">尚無任務</td></tr>';
-}
-function addTask(){const t={task_id:'T'+Date.now(),task_name:'新任務',member:S.members[0]?.name||'',kr_ref:'',level:'L1',est_hours:2,actual_hours:0,completion_pct:0,status:'未開始',note:''};S.tasks.push(t);pendingTasks[t.task_id]=t;renderTasks();}
-
-// ── MEMBER BLUEPRINT ──
-function renderMbpChips(){document.getElementById('mbp-chips').innerHTML=S.members.map((m,i)=>`<button class="mchip ${i===activeMbp?'on':''}" onclick="activeMbp=${i};renderMbpChips();renderMbp()">${m.name}</button>`).join('');}
-function renderMbp(){
-  const m=S.members[activeMbp];if(!m)return;
-  const mt=S.tasks.filter(t=>t.member===m.name),done=mt.filter(t=>t.status==='完成'),inprog=mt.filter(t=>t.status==='進行中'),l3=mt.filter(t=>t.level==='L3');
-  const estT=mt.reduce((s,t)=>s+(+t.est_hours||0),0),actT=mt.reduce((s,t)=>s+(+t.actual_hours||0),0);
-  const avgP=mt.length?Math.round(mt.reduce((s,t)=>s+(+t.completion_pct||0),0)/mt.length):0;
-  const cr=mt.length?Math.round(done.length/mt.length*100):0,ha=hpScore(mt);
-  const over=mt.filter(t=>hp(t).code==='over'),best=mt.filter(t=>hp(t).code==='best');
-  document.getElementById('mbp-body').innerHTML=`
-    <div class="mgrid"><div class="mc"><div class="ml">任務總數</div><div class="mv">${mt.length}</div></div><div class="mc"><div class="ml">完成率</div><div class="mv" style="color:${m.color}">${cr}%</div></div><div class="mc"><div class="ml">整體進度</div><div class="mv" style="color:${m.color}">${avgP}%</div></div><div class="mc"><div class="ml">工時準確度</div><div class="mv">${ha!==null?ha+'%':'—'}</div><div class="ms">已完成任務</div></div></div>
-    ${best.length?`<div style="background:var(--tl);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--td)">⚡ <strong>${best.length} 個提前完成</strong>：${best.map(t=>t.task_name).join('、')}</div>`:''}
-    ${over.length?`<div style="background:var(--cl);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:var(--cd)">⚠ <strong>${over.length} 個超支</strong>：${over.map(t=>t.task_name+(t.note?' ('+t.note+')':'')).join('、')}</div>`:''}
-    <div class="two"><div class="card"><div class="sec" style="margin-bottom:10px">任務分佈</div>
-      <div class="cbr"><div class="cbl">完成</div><div class="cbt"><div class="cbf" style="width:${cr}%;background:var(--t)">${cr}%</div></div></div>
-      <div class="cbr"><div class="cbl">進行中</div><div class="cbt"><div class="cbf" style="width:${mt.length?Math.round(inprog.length/mt.length*100):0}%;background:${m.color}">${mt.length?Math.round(inprog.length/mt.length*100):0}%</div></div></div>
-      <div class="cbr"><div class="cbl">L3 比例</div><div class="cbt"><div class="cbf" style="width:${mt.length?Math.round(l3.length/mt.length*100):0}%;background:var(--a)">${mt.length?Math.round(l3.length/mt.length*100):0}%</div></div></div>
-    </div><div class="card"><div class="sec" style="margin-bottom:10px">工時摘要</div>
-      <div style="display:flex;gap:16px;margin-bottom:8px"><div><div class="ml">預估</div><div class="mv" style="font-size:18px">${estT}h</div></div><div><div class="ml">實際</div><div class="mv" style="font-size:18px;color:${actT>estT?'var(--c)':'var(--t)'}">${actT}h</div></div></div>
-      <div style="font-size:10px;color:var(--muted)">${actT>estT?`超出 ${(actT-estT).toFixed(1)}h`:`尚餘 ${(estT-actT).toFixed(1)}h`}</div>
-    </div></div>
-    <div class="card"><div class="sec" style="margin-bottom:10px">任務明細</div>
-      ${mt.map(t=>{const h=hp(t),p=+t.completion_pct,e=+t.est_hours,a=+t.actual_hours,diff=(a-e).toFixed(1),bc=p===100?'var(--t)':p>=50?m.color:'var(--a)';return`<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:.5px solid rgba(0,0,0,.05)"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:12px;font-weight:500">${esc(t.task_name)}</div><div style="display:flex;gap:5px"><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span><span class="bdg ${h.cls}">${h.label}</span></div></div><div style="display:flex;gap:14px;font-size:11px;color:var(--muted);margin-bottom:4px"><span>完成度 <strong style="color:${bc}">${p}%</strong></span><span>預估 <strong>${e}h</strong></span><span>實際 <strong style="color:${parseFloat(diff)>0?'var(--c)':'var(--t)'}">${a}h</strong></span><span>差異 <strong style="color:${parseFloat(diff)>0?'var(--c)':'var(--t)'}">${parseFloat(diff)>0?'+':''}${diff}h</strong></span></div><div class="pw" style="height:5px"><div class="pb" style="width:${p}%;height:5px;background:${bc}"></div></div>${t.note?`<div style="font-size:10px;color:var(--a);margin-top:4px">📝 ${esc(t.note)}</div>`:''}</div>`;}).join('')||'<div style="color:var(--muted);font-size:12px">尚無任務</div>'}
-    </div>`;
+function getAllData() {
+  return {
+    tasks:     getTasks({}),
+    okr:       getOKR({}),
+    vacancies: getVacancies(),
+    members:   getMembers(),
+    settings:  getSettings(),
+  };
 }
 
-// ── DASHBOARD ──
-function setDV(btn){document.querySelectorAll('#tab-dash .bts').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});btn.style.background='var(--pl)';btn.style.color='var(--pd)';btn.style.borderColor='var(--p)';}
-function renderDash(){
-  const done=S.tasks.filter(t=>t.status==='完成'),inprog=S.tasks.filter(t=>t.status==='進行中');
-  const mStats=S.members.map(m=>{const mt=S.tasks.filter(t=>t.member===m.name),md=mt.filter(t=>t.status==='完成');return{name:m.name,color:m.color,total:mt.length,done:md.length,cr:mt.length?Math.round(md.length/mt.length*100):0,ha:hpScore(mt)};});
-  const overT=S.tasks.filter(t=>hp(t).code==='over');
-  document.getElementById('dash-body').innerHTML=`
-    <div class="mgrid"><div class="mc"><div class="ml">任務總數</div><div class="mv">${S.tasks.length}</div></div><div class="mc"><div class="ml">已完成</div><div class="mv" style="color:var(--t)">${done.length}</div></div><div class="mc"><div class="ml">進行中</div><div class="mv" style="color:var(--p)">${inprog.length}</div></div><div class="mc"><div class="ml">超支警示</div><div class="mv" style="color:var(--c)">${overT.length}</div></div></div>
-    <div class="two" style="margin-bottom:14px">
-      <div class="card"><div class="sec" style="margin-bottom:10px">完成率 by Member <span style="font-size:9px;color:var(--p);cursor:pointer;margin-left:4px" onclick="openMdl('各 Member 任務明細',memberDetailHtml())">明細→</span></div>
-        ${mStats.map(m=>`<div class="cbr"><div class="cbl">${m.name}</div><div class="cbt"><div class="cbf" style="width:${m.cr}%;background:${m.color}">${m.cr}%</div></div><span style="font-size:10px;color:var(--muted);width:32px">${m.done}/${m.total}</span></div>`).join('')}
-      </div>
-      <div class="card"><div class="sec" style="margin-bottom:10px">工時準確度 by Member</div>
-        ${mStats.map(m=>`<div class="cbr"><div class="cbl">${m.name}</div><div class="cbt"><div class="cbf" style="width:${m.ha||0}%;background:${m.color}">${m.ha!==null?m.ha+'%':'—'}</div></div></div>`).join('')}
-        <div style="font-size:9px;color:var(--muted);margin-top:6px">僅計算已完成任務</div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div class="sec" style="margin:0">關缺管理</div><button class="btn bts" onclick="openMdl('關缺管理 — 完整列表',vacDetailHtml())">查看明細→</button></div>
-      <div class="vgrid">
-        ${S.vacancies.map((v,vi)=>`<div class="vcard" onclick="openVacEdit(${vi})"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px"><div style="font-size:13px;font-weight:500">${esc(v.role)}</div><span class="bdg ${VST[v.status]||'bg2'}">${v.status}</span></div><div style="font-size:10px;color:var(--muted);margin-bottom:4px">${v.func} ｜ ${v.level} ｜ HC ×${v.hc}</div><div style="font-size:10px;color:var(--muted)">人選：${esc(v.candidates||'—')}</div><div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted);margin-top:7px"><div style="width:7px;height:7px;border-radius:50%;background:${mcolor(v.owner)}"></div>${esc(v.owner)}</div></div>`).join('')}
-        <div class="vcard" style="border-style:dashed;display:flex;align-items:center;justify-content:center;color:var(--p);font-size:12px;min-height:90px" onclick="openAddVac()">＋ 新增關缺</div>
-      </div>
-    </div>
-    <div class="card"><div class="sec" style="margin-bottom:10px">⚠ 超支任務清單</div>
-      ${overT.length?`<table><thead><tr><th>任務</th><th>負責人</th><th>預估h</th><th>實際h</th><th>超支</th><th>完成度</th><th>修正說明</th></tr></thead><tbody>${overT.map(t=>{const o=((+t.actual_hours-+t.est_hours)/(+t.est_hours||1)*100).toFixed(0);return`<tr class="warn-row"><td style="font-size:11px">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)};font-weight:500">${esc(t.member)}</td><td style="font-size:11px">${t.est_hours}h</td><td style="font-size:11px;color:var(--cd);font-weight:500">${t.actual_hours}h</td><td><span class="bdg hp-over">+${o}%</span></td><td style="font-size:11px">${t.completion_pct}%</td><td style="font-size:11px;color:${t.note?'var(--text)':'var(--a)'}">${esc(t.note||'⚠ 尚未填寫')}</td></tr>`;}).join('')}</tbody></table>`:`<div style="font-size:12px;color:var(--t);padding:8px 0">✓ 目前無超支任務。</div>`}
-    </div>`;
-}
-function memberDetailHtml(){return S.members.map(m=>{const mt=S.tasks.filter(t=>t.member===m.name);return`<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:500;color:${m.color};margin-bottom:6px">${m.name}</div><table><thead><tr><th>任務</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>預估h</th><th>實際h</th></tr></thead><tbody>${mt.map(t=>{const h=hp(t);return`<tr><td style="font-size:11px">${esc(t.task_name)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.completion_pct}%</td><td><span class="bdg ${h.cls}">${h.label}</span></td><td style="font-size:11px">${t.est_hours}h</td><td style="font-size:11px">${t.actual_hours}h</td></tr>`;}).join('')}</tbody></table></div>`;}).join('');}
-function vacDetailHtml(){return`<table><thead><tr><th>職位</th><th>職能</th><th>職級</th><th>HC</th><th>負責人</th><th>人選</th><th>狀態</th></tr></thead><tbody>${S.vacancies.map(v=>`<tr><td style="font-size:12px;font-weight:500">${esc(v.role)}</td><td style="font-size:11px">${v.func}</td><td style="font-size:11px">${v.level}</td><td style="font-size:11px">${v.hc}</td><td style="font-size:11px;font-weight:500">${esc(v.owner)}</td><td style="font-size:11px">${esc(v.candidates||'—')}</td><td><span class="bdg ${VST[v.status]||'bg2'}">${v.status}</span></td></tr>`).join('')}</tbody></table>`;}
-function openVacEdit(vi){const v=S.vacancies[vi];openMdl(v.role+' — 職缺詳情',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px"><div><div class="ml">職能</div><input class="ic" value="${esc(v.func)}" onchange="S.vacancies[${vi}].func=this.value"></div><div><div class="ml">職級</div><input class="ic" value="${esc(v.level)}" onchange="S.vacancies[${vi}].level=this.value"></div><div><div class="ml">HC 需求</div><input type="number" class="ic" value="${v.hc}" min="1" onchange="S.vacancies[${vi}].hc=parseInt(this.value)||1"></div><div><div class="ml">負責人</div><select class="ic" onchange="S.vacancies[${vi}].owner=this.value">${S.members.map(m=>`<option ${v.owner===m.name?'selected':''}>${m.name}</option>`).join('')}</select></div></div><div style="margin-bottom:10px"><div class="ml">目前人選</div><input class="ic" value="${esc(v.candidates||'')}" style="width:100%" onchange="S.vacancies[${vi}].candidates=this.value"></div><div style="margin-bottom:14px"><div class="ml">狀態</div><select class="ic" onchange="S.vacancies[${vi}].status=this.value">${['Sourcing','初篩','面試中','Offer 談判','JD 準備'].map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" onclick="closeMdl(null)">取消</button><button class="btn btp" onclick="saveVac(${vi})">↑ 儲存至 Sheets</button></div>`);}
-async function saveVac(vi){closeMdl(null);renderDash();if(!S.demo){const r=await apiPost({action:'upsertVac',data:{...S.vacancies[vi]}});showToast(r?.success?'關缺已儲存':'儲存失敗');}}
-function openAddVac(){openMdl('新增關缺',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><div class="ml">職位名稱</div><input class="ic" id="nv-r" placeholder="e.g. 後端工程師"></div><div><div class="ml">職能</div><input class="ic" id="nv-f" placeholder="Engineering"></div><div><div class="ml">職級</div><input class="ic" id="nv-l" placeholder="Senior / Mid / Junior"></div><div><div class="ml">HC 需求</div><input type="number" class="ic" id="nv-h" value="1" min="1"></div><div><div class="ml">負責人</div><select class="ic" id="nv-o">${S.members.map(m=>`<option>${m.name}</option>`).join('')}</select></div><div><div class="ml">人選</div><input class="ic" id="nv-c" placeholder="—"></div></div><button class="btn btp" style="margin-top:14px;width:100%" onclick="confirmAddVac()">確認新增</button>`);}
-async function confirmAddVac(){const v={vac_id:'V'+Date.now(),role:document.getElementById('nv-r').value||'新職缺',func:document.getElementById('nv-f').value||'—',level:document.getElementById('nv-l').value||'—',hc:parseInt(document.getElementById('nv-h').value)||1,owner:document.getElementById('nv-o').value,candidates:document.getElementById('nv-c').value||'—',status:'Sourcing'};S.vacancies.push(v);closeMdl(null);renderDash();if(!S.demo){await apiPost({action:'upsertVac',data:{...v}});showToast('關缺已新增至 Sheets');}}
-
-// ── PERF ──
-function renderPerfChips(){document.getElementById('perf-chips').innerHTML=S.members.map((m,i)=>`<button class="mchip ${i===activePerf?'on':''}" onclick="activePerf=${i};renderPerfChips();renderPerf()">${m.name}</button>`).join('');}
-function renderPerf(){
-  const m=S.members[activePerf];if(!m)return;
-  const mt=S.tasks.filter(t=>t.member===m.name),done=mt.filter(t=>t.status==='完成');
-  const cr=mt.length?Math.round(done.length/mt.length*100):0,l3=mt.length?Math.round(mt.filter(t=>t.level==='L3').length/mt.length*100):0,ha=hpScore(mt)||0;
-  const krl=mt.length?Math.round(mt.filter(t=>t.kr_ref&&t.kr_ref.length>2).length/mt.length*100):0;
-  const dims=[{label:'任務完成率',val:cr,target:80,w:.35},{label:'L3 承擔比例',val:l3,target:30,w:.30},{label:'工時準確度',val:ha,target:75,w:.20},{label:'KR 連結度',val:krl,target:70,w:.15}];
-  const th=parseInt(S.settings?.promote_threshold||'70'),score=Math.round(dims.reduce((s,d)=>s+d.val*d.w,0)),promote=score>=th;
-  const bestCnt=mt.filter(t=>hp(t).code==='best').length,overCnt=mt.filter(t=>hp(t).code==='over').length;
-  document.getElementById('perf-body').innerHTML=`
-    <div class="two"><div class="card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div style="width:36px;height:36px;border-radius:50%;background:${m.color};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#fff">${m.name[0]}</div><div style="flex:1"><div style="font-weight:600;font-size:14px">${m.name}</div><div style="font-size:10px;color:var(--muted)">Recruit Member</div></div><span class="bdg ${promote?'bt':'ba'}">${promote?'✓ 達標':'培育中'}</span></div>
-      <div style="font-size:30px;font-weight:700;color:${m.color}">${score}<span style="font-size:14px;color:var(--muted);font-weight:400">/100</span></div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Promote 綜合得分</div>
-      <div class="pbar"><div class="pfill" style="width:${score}%;background:${m.color}"></div><div class="pmark" style="left:${th}%"></div></div>
-      <div style="font-size:9px;color:var(--a);padding-left:${th}%">門檻 ${th}</div>
-      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">${bestCnt?`<span class="bdg hp-best">⚡ 提前完成 ${bestCnt} 項</span>`:''}${overCnt?`<span class="bdg hp-over">⚠ 超支 ${overCnt} 項</span>`:''}</div>
-    </div><div class="card"><div class="sec" style="margin-bottom:10px">各維度評分</div>
-      ${dims.map(d=>{const bc=d.val>=d.target?'var(--t)':d.val>=d.target*.6?m.color:'var(--c)';return`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--muted)">${d.label} <span style="font-size:9px">(${Math.round(d.w*100)}%)</span></span><span style="font-weight:500;color:${bc}">${d.val}%</span></div><div class="pw" style="height:6px"><div class="pb" style="width:${d.val}%;height:6px;background:${bc}"></div></div><div style="font-size:9px;color:var(--muted);margin-top:1px">目標 ≥ ${d.target}%</div></div>`;}).join('')}
-    </div></div>
-    <div class="card" style="margin-top:2px"><div class="sec" style="margin-bottom:10px">任務明細</div>
-      <table><thead><tr><th>任務</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>預估h</th><th>實際h</th><th>差異</th><th>修正說明</th></tr></thead>
-      <tbody>${mt.map(t=>{const h=hp(t),e=+t.est_hours,a=+t.actual_hours,diff=(a-e).toFixed(1),p=+t.completion_pct;return`<tr class="${h.code==='over'?'warn-row':''}"><td style="font-size:11px">${esc(t.task_name)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td><div style="font-size:10px">${p}%</div><div class="pw" style="height:4px"><div class="pb" style="width:${p}%;height:4px;background:${p===100?'var(--t)':p>=50?m.color:'var(--a)'}"></div></div></td><td><span class="bdg ${h.cls}">${h.label}</span></td><td style="font-size:11px">${e}h</td><td style="font-size:11px;color:${parseFloat(diff)>0?'var(--cd)':'var(--td)'};font-weight:500">${a}h</td><td style="font-size:11px;color:${parseFloat(diff)>0?'var(--c)':'var(--t)'}">${parseFloat(diff)>0?'+':''}${diff}h</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`;}).join('')}</tbody></table>
-    </div>`;
+function getTasks(params) {
+  const sheet = getSheet('Tasks');
+  const rows  = sheetToObjects(sheet);
+  // 可依 quarter / member 篩選
+  return rows.filter(r => {
+    if (params.quarter && r.quarter !== params.quarter) return false;
+    if (params.member  && r.member  !== params.member)  return false;
+    return true;
+  });
 }
 
-// ── MODAL / TOAST / CFG ──
-function openMdl(title,html){document.getElementById('mtitle').textContent=title;document.getElementById('mbody').innerHTML=html;document.getElementById('modal').classList.add('open');}
-function closeMdl(e){if(e&&e.target!==document.getElementById('modal'))return;document.getElementById('modal').classList.remove('open');}
-function openCfg(){document.getElementById('cfg-url').value=cfg.apiUrl||'';document.getElementById('cfg-tok').value=cfg.token||'';document.getElementById('cfg-modal').classList.add('open');}
-function saveCfg(){cfg.apiUrl=document.getElementById('cfg-url').value.trim();cfg.token=document.getElementById('cfg-tok').value.trim();localStorage.setItem(CFG_KEY,JSON.stringify(cfg));location.reload();}
-let _tt;function showToast(msg,err=false){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(err?' err':'');clearTimeout(_tt);_tt=setTimeout(()=>el.className='toast',3000);}
-</script>
-</body>
-</html>
+function getOKR(params) {
+  const sheet = getSheet('OKR');
+  const rows  = sheetToObjects(sheet);
+  if (params.quarter) return rows.filter(r => r.quarter === params.quarter);
+  return rows;
+}
+
+function getVacancies() {
+  return sheetToObjects(getSheet('Vacancies'));
+}
+
+function getMembers() {
+  return sheetToObjects(getSheet('Members'));
+}
+
+function getSettings() {
+  const rows = sheetToObjects(getSheet('Settings'));
+  const obj  = {};
+  rows.forEach(r => { obj[r.key] = r.value; });
+  return obj;
+}
+
+// ════════════════════════════════
+//  WRITE 函式
+// ════════════════════════════════
+
+// Tasks：members 只能更新 actual_hours / completion_pct / status / note
+// Lead 可以更新所有欄位
+// role 由前端傳入（'lead' or 'member'），token 已驗過
+
+function upsertTask(data) {
+  const sheet   = getSheet('Tasks');
+  const headers = getHeaders(sheet);
+  const rows    = sheet.getDataRange().getValues();
+
+  // 自動補 updated_at
+  data.updated_at = new Date().toISOString();
+
+  // 狀態聯動：完成 → pct=100，未開始 → pct=0
+  if (data.status === '完成')    data.completion_pct = 100;
+  if (data.status === '未開始')  data.completion_pct = 0;
+
+  // 找是否已有此 task_id
+  const idIdx = headers.indexOf('task_id');
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][idIdx]) === String(data.task_id)) {
+      // 更新既有列
+      const role = data._role || 'member';
+      const allowedForMember = ['actual_hours','completion_pct','status','note','updated_at'];
+      headers.forEach((h, col) => {
+        if (h in data) {
+          if (role === 'lead' || allowedForMember.includes(h)) {
+            sheet.getRange(i + 1, col + 1).setValue(data[h]);
+          }
+        }
+      });
+      return { success: true, action: 'updated', task_id: data.task_id };
+    }
+  }
+
+  // 新增列（只有 lead 可以）
+  if (data._role === 'member') return { error: 'Members cannot create new tasks' };
+  if (!data.task_id) data.task_id = 'T' + Date.now();
+  const newRow = headers.map(h => (h in data ? data[h] : ''));
+  sheet.appendRow(newRow);
+  return { success: true, action: 'created', task_id: data.task_id };
+}
+
+function deleteTask(task_id) {
+  return deleteRowById(getSheet('Tasks'), 'task_id', task_id);
+}
+
+function upsertVac(data) {
+  const sheet   = getSheet('Vacancies');
+  const headers = getHeaders(sheet);
+  const rows    = sheet.getDataRange().getValues();
+  data.updated_at = new Date().toISOString();
+
+  const idIdx = headers.indexOf('vac_id');
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][idIdx]) === String(data.vac_id)) {
+      headers.forEach((h, col) => {
+        if (h in data) sheet.getRange(i + 1, col + 1).setValue(data[h]);
+      });
+      return { success: true, action: 'updated', vac_id: data.vac_id };
+    }
+  }
+
+  if (!data.vac_id) data.vac_id = 'V' + Date.now();
+  sheet.appendRow(headers.map(h => data[h] || ''));
+  return { success: true, action: 'created', vac_id: data.vac_id };
+}
+
+function deleteVac(vac_id) {
+  return deleteRowById(getSheet('Vacancies'), 'vac_id', vac_id);
+}
+
+// OKR 整張覆寫（結構較複雜，用整季替換較安全）
+function updateOKR(data) {
+  // data = { quarter: 'Q3', rows: [...] }
+  const sheet   = getSheet('OKR');
+  const headers = getHeaders(sheet);
+  const rows    = sheet.getDataRange().getValues();
+
+  // 刪除該季所有列（從後往前刪避免 index 錯位）
+  const qIdx = headers.indexOf('quarter');
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (rows[i][qIdx] === data.quarter) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+
+  // 重新寫入
+  data.rows.forEach(row => {
+    sheet.appendRow(headers.map(h => row[h] || ''));
+  });
+
+  return { success: true, quarter: data.quarter, count: data.rows.length };
+}
+
+// ════════════════════════════════
+//  工具函式
+// ════════════════════════════════
+
+function getSheet(name) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName(name);
+  if (!sheet) throw new Error('Sheet not found: ' + name);
+  return sheet;
+}
+
+function getHeaders(sheet) {
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+}
+
+function sheetToObjects(sheet) {
+  const data    = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  const headers = data[0].map(String);
+  return data.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = row[i]; });
+    return obj;
+  });
+}
+
+function deleteRowById(sheet, idField, idValue) {
+  const headers = getHeaders(sheet);
+  const rows    = sheet.getDataRange().getValues();
+  const idIdx   = headers.indexOf(idField);
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][idIdx]) === String(idValue)) {
+      sheet.deleteRow(i + 1);
+      return { success: true, deleted: idValue };
+    }
+  }
+  return { error: 'Row not found' };
+}
