@@ -507,12 +507,14 @@ function getOKRLocal(key,q,type){
 function buildOKRRows(data,q,member){
   const rows=[];
   (data||[]).forEach(o=>o.kr.forEach(k=>{
-    (k.tasks.length?k.tasks:[{name:'',desc:''}]).forEach(t=>{
-      const row={quarter:q,objective:o.o,kr_label:k.label,kr_text:k.text,kr_pct:k.pct,task_name:t.name,task_desc:t.desc};
+    const tasks=k.tasks&&k.tasks.length?k.tasks:[{name:'',desc:''}];
+    tasks.forEach(t=>{
+      const row={quarter:q,objective:o.o,kr_label:k.label,kr_text:k.text,kr_pct:k.pct||0,task_name:t.name||'',task_desc:t.desc||''};
       if(member)row.member=member;
       rows.push(row);
     });
   }));
+  // 即使 data 為空，也回傳一個佔位列讓 updateOKR 知道有執行（不含資料）
   return rows;
 }
 function renderOKRBlock(data,store,fullKey,q,addFn,saveFn){
