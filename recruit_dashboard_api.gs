@@ -1,0 +1,330 @@
+// ============================================================
+//  Recruit Dashboard — Google Apps Script API
+//  貼到 Apps Script 後，部署為 Web App
+//  執行身分：我（你的 Google 帳號）
+//  存取權限：任何人
+// ============================================================
+
+const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID'; // ← 換成你的 Dashboard DB Sheet ID
+
+// 外部缺額表 Sheet ID（唯讀，篩選 Rita 的錄取 & 關缺）
+const VACANCY_SHEET_ID = '13Y61X61FQrBUExiHLvS6LzNXR0DMp6XD-EVtxGj6G9M';
+const VACANCY_TAB_GID  = '1251169333'; // 職缺表 tab
+
+// ── 允許 CORS，讓前端 Dashboard 可以呼叫 ──
+function doGet(e) {
+  const action = e.parameter.action;
+  let result;
+  try {
+    if      (action === 'getTasks')    result = getTasks(e.parameter);
+    else if (action === 'getOKR')      result = getOKR(e.parameter);
+    else if (action === 'getVac')      result = getVacancies();
+    else if (action === 'getAll')      result = getAllData();
+    else result = { error: 'Unknown action' };
+  } catch (err) {
+    result = { error: err.message };
+  }
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return jsonResponse({ error: 'Invalid JSON' });
+  }
+
+  // ── 權限驗證：只有寫入 token 符合才允許 ──
+  const settings = getSettings();
+  const validToken = settings['write_token'] || '';
+  if (!body.token || body.token !== validToken) {
+    return jsonResponse({ error: 'Unauthorized' });
+  }
+
+  let result;
+  try {
+    const action = body.action;
+    if      (action === 'upsertTask')     result = upsertTask(body.data);
+    else if (action === 'upsertVac')      result = upsertVac(body.data);
+    else if (action === 'upsertPipeline') result = upsertPipeline(body.data);
+    else if (action === 'upsertLink')     result = upsertLink(body.data);
+    else if (action === 'updateOKR')      result = updateOKR(body.data);
+    else result = { error: 'Unknown action' };
+  } catch (err) {
+    result = { error: err.message };
+  }
+  return jsonResponse(result);
+}
+
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================
+//  READ — 主要資料庫
+// ============================================================
+
+function getAllData() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  return {
+    tasks:      sheetToObjects(ss, 'Tasks'),
+    okr:        sheetToObjects(ss, 'OKR'),
+    mbp:        sheetToObjects(ss, 'MBP'),
+    members:    sheetToObjects(ss, 'Members'),
+    settings:   settingsToObject(ss),
+    pipeline:   sheetToObjects(ss, 'Pipeline'),
+    links:      sheetToObjects(ss, 'Links'),
+    vacancies:  getExternalVacancies(), // 來自外部缺額表
+  };
+}
+
+function getTasks(params) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  return sheetToObjects(ss, 'Tasks');
+}
+
+function getOKR(params) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const type   = params.type   || 'okr';
+  const quarter = params.quarter || '';
+  const data   = sheetToObjects(ss, type === 'mbp' ? 'MBP' : 'OKR');
+  return quarter ? data.filter(r => r.quarter === quarter) : data;
+}
+
+function getVacancies() {
+  return getExternalVacancies();
+}
+
+function getSettings() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  return settingsToObject(ss);
+}
+
+// ============================================================
+//  外部缺額表串接（唯讀）
+//  篩選條件：窗口 = "Rita"  且  Status = "錄取" 或 "關缺"
+//  欄位對應（缺額表 → Dashboard）：
+//    職能      = 職能  (col B)
+//    職等      = 職等  (col H，原「職等」)
+//    事業      = 事業  (col I，原「事業」)
+//    close day = close day (col AB)
+//    報到日    = 報到日    (col AC)
+//    報到人員  = 報到人員  (col AD)
+//    來源      = 開缺原因  (col L，僅作參考；可手動覆寫)
+//    獵才      = 窗口      (col D，即 Rita)
+//    狀態      = Status    (col T)
+// ============================================================
+
+function getExternalVacancies() {
+  try {
+    const ss  = SpreadsheetApp.openById(VACANCY_SHEET_ID);
+    // 取得職缺表 tab（以 gid 或名稱）
+    const sheets = ss.getSheets();
+    let sheet = sheets.find(s => s.getSheetId().toString() === VACANCY_TAB_GID);
+    if (!sheet) sheet = ss.getSheetByName('職缺表') || ss.getSheets()[0];
+
+    const data   = sheet.getDataRange().getValues();
+    const header = data[0]; // 第一列為欄位名稱
+
+    // 建立欄位索引
+    const col = (name) => header.indexOf(name);
+    const C = {
+      dept:     col('部門'),
+      func:     col('職能'),
+      title:    col('中文職稱'),
+      level:    col('職等'),
+      biz_grp:  col('部門/事業群'),
+      biz:      col('事業'),
+      team:     col('團隊'),
+      owner:    col('窗口'),      // 篩選用
+      open_date: col('開缺日期'),
+      status:   col('Status'),    // 篩選用
+      close_day: col('close day'),
+      onboard:  col('報到日'),
+      reporter: col('報到人員'),
+      reason:   col('開缺原因'),
+      job_no:   col('職缺編號'),
+    };
+
+    const TARGET_OWNER  = 'Rita';
+    const TARGET_STATUS = ['錄取', '關缺'];
+
+    const results = [];
+    for (let i = 1; i < data.length; i++) {
+      const row    = data[i];
+      const owner  = (row[C.owner]  || '').toString().trim();
+      const status = (row[C.status] || '').toString().trim();
+
+      if (owner !== TARGET_OWNER) continue;
+      if (!TARGET_STATUS.includes(status)) continue;
+
+      results.push({
+        vac_id:     'EXT-' + (i + 1),
+        func:       row[C.func]      || '',
+        level:      row[C.level]     || '',
+        biz:        row[C.biz]       || row[C.biz_grp] || '',
+        close_day:  formatDate(row[C.close_day]),
+        onboard_day: formatDate(row[C.onboard]),
+        reporter:   row[C.reporter]  || '',
+        src:        '',   // 手動填寫
+        cm:         '',   // 手動填寫
+        status:     '',   // 手動填寫
+        // 附加資訊（備查）
+        title:      row[C.title]     || '',
+        open_date:  formatDate(row[C.open_date]),
+        job_no:     row[C.job_no]    || '',
+        _source:    'external',
+      });
+    }
+    return results;
+  } catch (err) {
+    // 若外部 Sheet 讀不到，回傳空陣列不中斷
+    Logger.log('getExternalVacancies error: ' + err.message);
+    return [];
+  }
+}
+
+function formatDate(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return val.toString().trim();
+}
+
+// ============================================================
+//  WRITE — 主要資料庫
+// ============================================================
+
+function upsertTask(data) {
+  return upsertRow(SHEET_ID, 'Tasks', 'task_id', data);
+}
+
+function upsertVac(data) {
+  // 外部資料（_source === 'external'）不寫回
+  if (data._source === 'external') return { success: true, skipped: true };
+  return upsertRow(SHEET_ID, 'Vacancies', 'vac_id', data);
+}
+
+function upsertPipeline(data) {
+  return upsertRow(SHEET_ID, 'Pipeline', 'pip_id', data);
+}
+
+function upsertLink(data) {
+  return upsertRow(SHEET_ID, 'Links', 'link_id', data);
+}
+
+const OKR_HEADERS = ['quarter','objective','kr_label','kr_text','kr_pct','task_name','task_desc'];
+const MBP_HEADERS = ['quarter','member','objective','kr_label','kr_text','kr_pct','task_name','task_desc'];
+
+function ensureHeaders(sheet, expected) {
+  const lastCol = sheet.getLastColumn();
+  const lastRow = sheet.getLastRow();
+  const current = lastCol > 0 && lastRow > 0
+    ? sheet.getRange(1, 1, 1, Math.max(lastCol, expected.length)).getValues()[0]
+    : [];
+  const hasAll = expected.every(h => current.indexOf(h) >= 0);
+  if (hasAll) return current;
+  // 若表頭不完整：清空後寫入正確 header
+  sheet.clear();
+  sheet.getRange(1, 1, 1, expected.length).setValues([expected]);
+  return expected.slice();
+}
+
+function updateOKR(data) {
+  const sheetName = data.type === 'mbp' ? 'MBP' : 'OKR';
+  const expected  = data.type === 'mbp' ? MBP_HEADERS : OKR_HEADERS;
+  const ss     = SpreadsheetApp.openById(SHEET_ID);
+  let   sheet  = ss.getSheetByName(sheetName);
+  if (!sheet) sheet = ss.insertSheet(sheetName);
+
+  // 確保表頭存在（新 sheet 或欄位不齊時自動建立）
+  const header = ensureHeaders(sheet, expected);
+
+  const rows    = data.rows || [];
+  const quarter = data.quarter;
+  const member  = data.member || null;
+
+  // 取得現有資料，刪除同 quarter（+ 同 member，若是 MBP）的舊列
+  const existing = sheet.getDataRange().getValues();
+  const qIdx     = header.indexOf('quarter');
+  const mIdx     = header.indexOf('member');
+
+  // 從後往前刪，避免 row index 位移
+  // 用 String() 比對以避免 Sheets 把 "2025" 讀成數字 2025 造成型別不符
+  for (let i = existing.length - 1; i >= 1; i--) {
+    const rowQ = qIdx >= 0 ? existing[i][qIdx] : null;
+    const rowM = mIdx >= 0 ? existing[i][mIdx] : null;
+    const matchQ = String(rowQ) === String(quarter);
+    const matchM = !member || String(rowM) === String(member);
+    if (matchQ && matchM) sheet.deleteRow(i + 1);
+  }
+
+  // 寫入新列
+  if (rows.length > 0) {
+    const newRows = rows.map(r => header.map(h => r[h] !== undefined ? r[h] : ''));
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, header.length).setValues(newRows);
+  }
+  return { success: true, written: rows.length };
+}
+
+// ============================================================
+//  工具函式
+// ============================================================
+
+function sheetToObjects(ss, tabName) {
+  const sheet = ss.getSheetByName(tabName);
+  if (!sheet) return [];
+  const data   = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  const header = data[0];
+  return data.slice(1).map(row => {
+    const obj = {};
+    header.forEach((h, i) => { obj[h] = row[i] !== undefined ? row[i].toString() : ''; });
+    return obj;
+  });
+}
+
+function settingsToObject(ss) {
+  const sheet = ss.getSheetByName('Settings');
+  if (!sheet) return {};
+  const data = sheet.getDataRange().getValues();
+  const obj  = {};
+  data.slice(1).forEach(row => {
+    if (row[0]) obj[row[0].toString().trim()] = row[1] !== undefined ? row[1].toString() : '';
+  });
+  return obj;
+}
+
+function upsertRow(sheetId, tabName, idField, data) {
+  const ss    = SpreadsheetApp.openById(sheetId);
+  let   sheet = ss.getSheetByName(tabName);
+  if (!sheet) sheet = ss.insertSheet(tabName);
+
+  const allData = sheet.getDataRange().getValues();
+  const header  = allData[0];
+  const idIdx   = header.indexOf(idField);
+
+  // 加入 updated_at
+  data['updated_at'] = new Date().toISOString();
+
+  const newRow = header.map(h => data[h] !== undefined ? data[h] : '');
+
+  if (idIdx >= 0 && data[idField]) {
+    // 找現有列
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][idIdx] && allData[i][idIdx].toString() === data[idField].toString()) {
+        sheet.getRange(i + 1, 1, 1, header.length).setValues([newRow]);
+        return { success: true, action: 'updated' };
+      }
+    }
+  }
+  // 新增列
+  sheet.appendRow(newRow);
+  return { success: true, action: 'inserted' };
+}

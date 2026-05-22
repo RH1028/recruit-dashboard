@@ -424,10 +424,47 @@ window.addEventListener('load',async()=>{
 
 async function apiGet(p={}){if(!isLive())return null;try{const url=new URL(cfg.apiUrl);Object.entries(p).forEach(([k,v])=>url.searchParams.set(k,v));return(await fetch(url.toString())).json();}catch(e){return null;}}
 async function apiPost(b){if(!isLive())return null;try{return(await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({token:cfg.token,...b})})).json();}catch(e){return null;}}
-async function loadData(){if(!isLive()){S.tasks=getDemoTasks();S.vacancies=getDemoVac();// S.pipeline starts empty - add via + 新增候選人
-  renderAll();return;}try{const d=await apiGet({action:'getAll'});if(d&&!d.error){Object.assign(S,{tasks:d.tasks||[],vacancies:d.vacancies||[],pipeline:d.pipeline||[]});renderAll();showToast('資料已載入');}else throw 0;}catch(e){showToast('連線失敗',true);}}
+async function loadData(){
+  if(!isLive()){
+    S.tasks=getDemoTasks();S.vacancies=getDemoVac();
+    renderAll();return;
+  }
+  try{
+    const d=await apiGet({action:'getAll'});
+    if(d&&!d.error){
+      Object.assign(S,{
+        tasks:d.tasks||[],
+        vacancies:d.vacancies||[],
+        pipeline:d.pipeline||[],
+        members:d.members||S.members||DEMO_MEMBERS,
+        settings:d.settings||S.settings||DEMO_SETTINGS,
+        okr:d.okr||[],
+        mbp:d.mbp||[],
+        links:d.links||S.links||[],
+        demo:false
+      });
+      // 清掉本地 OKR/MBP 編輯快取，讓畫面用 sheet 最新資料重建
+      okrLocal={};mbpLocal={};
+      renderAll();showToast('資料已載入');
+    }else throw new Error(d&&d.error?d.error:'no data');
+  }catch(e){showToast('連線失敗：'+(e.message||e),true);}
+}
 async function saveTasks(){const pending=Object.values(pendingTasks);if(!pending.length){showToast('沒有待儲存的變更');return;}if(S.demo){showToast('Demo 模式');pendingTasks={};return;}let ok=0,fail=0;for(const t of pending){const r=await apiPost({action:'upsertTask',data:t});r?.success?ok++:fail++;}pendingTasks={};showToast(fail?`${ok} 筆成功，${fail} 筆失敗`:`${ok} 筆已儲存`);}
-async function saveOKR(type){const q=document.getElementById(type==='okr'?'okr-year':'mbp-year').value;const local=type==='okr'?okrLocal:mbpLocal;const mName=type==='mbp'?S.members[activeMbpMember]?.name:null;const rows=buildOKRRows(local[type==='okr'?q:q+'_'+(mName||activeMbpMember)]||[],q,mName);if(S.demo){showToast('Demo 模式');return;}const r=await apiPost({action:'updateOKR',data:{type,quarter:q,member:mName,rows}});showToast(r?.success?'已儲存':'儲存失敗');}
+async function saveOKR(type){
+  const q=document.getElementById(type==='okr'?'okr-year':'mbp-year').value;
+  const local=type==='okr'?okrLocal:mbpLocal;
+  const mName=type==='mbp'?S.members[activeMbpMember]?.name:null;
+  const key=type==='okr'?q:q+'_'+(mName||activeMbpMember);
+  const rows=buildOKRRows(local[key]||[],q,mName);
+  if(S.demo){showToast('Demo 模式');return;}
+  const r=await apiPost({action:'updateOKR',data:{type,quarter:q,member:mName,rows}});
+  if(!r){showToast('連線失敗',true);return;}
+  if(r.error){showToast('儲存失敗：'+r.error,true);return;}
+  if(!r.success){showToast('儲存失敗',true);return;}
+  showToast('已儲存 '+(r.written||0)+' 筆');
+  // 儲存成功後自動回抓最新資料，確保畫面與 sheet 一致
+  await loadData();
+}
 
 function renderAll(){renderOKR();renderMbpMemberChips();renderMbpOKR();renderTasks();renderPerfChips();renderPerf();renderDash();renderVacancy();populateVacFilters();renderPipeline();renderLinks();}
 function showTab(id,btn){document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nitem').forEach(b=>b.classList.remove('on'));document.getElementById('tab-'+id).classList.add('on');btn.classList.add('on');}
@@ -501,7 +538,9 @@ function getOKRLocal(key,q,type){
   const rows=src.filter(r=>r.quarter===q&&(type==='okr'||(r.member===key)));
   const objs=[];
   rows.forEach(r=>{let o=objs.find(x=>x.o===r.objective);if(!o){o={o:r.objective,kr:[]};objs.push(o);}let k=o.kr.find(x=>x.label===r.kr_label);if(!k){k={label:r.kr_label,text:r.kr_text,pct:+r.kr_pct||0,tasks:[]};o.kr.push(k);}if(r.task_name)k.tasks.push({name:r.task_name,desc:r.task_desc||''});});
-  store[fullKey]=objs.length?objs:getDemoOKRForQ(q,type);
+  // 線上模式：找不到就回空陣列（讓畫面顯示「尚無 Objective」而非 Demo 假資料）
+  // Demo 模式：才回 fallback 範例
+  store[fullKey]=objs.length?objs:(S.demo?getDemoOKRForQ(q,type):[]);
   return store[fullKey];
 }
 function buildOKRRows(data,q,member){
