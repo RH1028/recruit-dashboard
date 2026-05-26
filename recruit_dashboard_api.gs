@@ -284,15 +284,31 @@ function updateOKR(data) {
 //  工具函式
 // ============================================================
 
+// 純日期欄位：讀出來會轉成 YYYY-MM-DD 字串（給 <input type="date"> 用）
+const PURE_DATE_FIELDS = ['start_date','end_date','close_day','onboard_day','open_date','report_date'];
+
 function sheetToObjects(ss, tabName) {
   const sheet = ss.getSheetByName(tabName);
   if (!sheet) return [];
   const data   = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
   const header = data[0];
+  const tz = Session.getScriptTimeZone();
   return data.slice(1).map(row => {
     const obj = {};
-    header.forEach((h, i) => { obj[h] = row[i] !== undefined ? row[i].toString() : ''; });
+    header.forEach((h, i) => {
+      const v = row[i];
+      if (v instanceof Date) {
+        // 日期欄位轉 YYYY-MM-DD；其餘 Date（例如 updated_at）保留 ISO
+        if (PURE_DATE_FIELDS.indexOf(h) >= 0) {
+          obj[h] = Utilities.formatDate(v, tz, 'yyyy-MM-dd');
+        } else {
+          obj[h] = v.toISOString();
+        }
+      } else {
+        obj[h] = (v !== undefined && v !== null) ? v.toString() : '';
+      }
+    });
     return obj;
   });
 }
