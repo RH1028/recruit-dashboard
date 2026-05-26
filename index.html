@@ -39,7 +39,8 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 .ptitle{font-size:17px;font-weight:600}
 .psub{font-size:12px;color:var(--muted);margin-top:2px}
 .card{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
-.mc{background:var(--bg);border-radius:var(--rs);padding:12px 14px}
+.mc{background:var(--bg);border-radius:var(--rs);padding:12px 14px;display:flex;flex-direction:column}
+.mc .mv{margin-top:auto}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
 .ml{font-size:11px;color:var(--muted);margin-bottom:3px}
 .mv{font-size:22px;font-weight:600}
@@ -64,6 +65,9 @@ select.ic{cursor:pointer}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{text-align:left;font-size:10px;font-weight:600;color:var(--muted);padding:6px 8px;border-bottom:.5px solid var(--bdr);white-space:nowrap}
 td{padding:7px 8px;border-bottom:.5px solid rgba(0,0,0,.04);vertical-align:middle}
+/* 任務工時表：標題與內容對齊置中 */
+#tab-tasks table th,#tab-tasks table td{text-align:center}
+#tab-tasks table .ic{margin:0 auto}
 tr:last-child td{border-bottom:none}
 .warn-row{background:rgba(216,90,48,.04)}
 .routine-row{background:rgba(136,135,128,.04)}
@@ -207,23 +211,32 @@ tr:last-child td{border-bottom:none}
         <!-- 工時表現說明 -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;font-size:10px;color:var(--muted)">
           工時表現：
+          <span class="bdg hp-routine">📅 待設定日期</span> 專案任務缺起始/結束日期（實際 h、完成度鎖定）
+          <span class="bdg hp-routine">⏳ 未開始</span> 今日 &lt; 起始日期（完成度鎖 0%）
+          <span class="bdg hp-na">⏵ 進行中</span> 已過起始日期、尚未完成
           <span class="bdg hp-early">⚡ 提前完成</span> 實際 &lt; 預估，完成 100%
-          <span class="bdg hp-ontime">✓ 準時完成</span> 實際 ≤ 預估，完成 100%
+          <span class="bdg hp-ontime">✓ 準時完成</span> 實際 = 預估，完成 100%
           <span class="bdg hp-over-done">⚠ 超時完成</span> 實際 &gt; 預估，完成 100%
           <span class="bdg hp-over">✗ 超支未完</span> 實際 &gt; 預估，未完成
-          <span class="bdg hp-routine">↻ 常態進行中</span> 常態工作
+          <span class="bdg hp-routine">↻ 常態進行中</span> 常態工作（一律顯示，不參與工時評估）
         </div>
         <!-- 類型說明 -->
         <div style="font-size:10px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:var(--bg);border-radius:var(--rs)">
           📌 <strong>常態工作</strong>（如每日 Sourcing、定期報表）：不計入任務完成率，僅累計工時，無完成度設定。
         </div>
+        <!-- 負責人篩選 -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="font-size:11px;color:var(--muted)">負責人：</span>
+          <div class="mchips" id="task-member-chips" style="margin:0"></div>
+        </div>
         <div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto">
-          <table style="min-width:800px">
+          <table style="min-width:1100px">
             <thead><tr>
               <th style="width:110px">任務名稱</th>
               <th style="width:70px">類型</th>
               <th style="width:52px">負責人</th>
-              <th style="width:100px">所屬 KR</th>
+              <th style="width:120px">Team OKR_KR</th>
+              <th style="width:120px">個人 KR</th>
               <th style="width:44px">難易度</th>
               <th style="width:50px">預估h</th>
               <th style="width:50px">實際h</th>
@@ -231,7 +244,6 @@ tr:last-child td{border-bottom:none}
               <th style="width:95px">結束日期</th>
               <th style="width:88px">任務完成度</th>
               <th style="width:90px">工時表現</th>
-              <th style="width:58px">狀態</th>
               <th style="width:110px">修正說明</th>
               <th style="width:26px"></th>
             </tr></thead>
@@ -350,9 +362,14 @@ tr:last-child td{border-bottom:none}
 const CFG_KEY='recruit_cfg_v5';
 let cfg={};
 try{cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'{}');}catch(e){cfg={};}
-const isLive=()=>!!(cfg.apiUrl&&cfg.token);
+// ?demo=1 強制走 Demo 模式（不影響 localStorage 的真實連線設定，方便預覽）
+const isLive=()=>{
+  try{if(new URLSearchParams(location.search).get('demo')==='1')return false;}catch(e){}
+  return !!(cfg.apiUrl&&cfg.token);
+};
 let activePerf=0,activeMbpMember=0,okrLocal={},mbpLocal={},pendingTasks={};
 let dashViewMode='team',dashMbrIdx=0;
+let activeTaskMember=null; // null = 全部
 
 // ══ CONSTANTS ══
 const PROMOTE_THRESHOLD=80;
@@ -365,15 +382,22 @@ const DEMO_MEMBERS=[{name:'Ava',color:'#7F77DD'},{name:'Ben',color:'#1D9E75'},{n
 const DEMO_SETTINGS={write_token:'demo',promote_threshold:'80'};
 let S={tasks:[],okr:[],mbp:[],vacancies:[],pipeline:[],members:DEMO_MEMBERS,settings:DEMO_SETTINGS,links:[],demo:true};
 
-function getDemoTasks(){return[
-  {task_id:'T1',task_name:'Backend JD 撰寫',   task_type:'專案任務',member:'Ava', kr_ref:'KR1',level:'L2',est_hours:3,  actual_hours:2.5,completion_pct:100,status:'完成',  note:'',start_date:'2025-05-01',end_date:'2025-05-03'},
-  {task_id:'T2',task_name:'每日 Sourcing',      task_type:'常態工作', member:'Ben', kr_ref:'',   level:'L1',est_hours:1,  actual_hours:1.2,completion_pct:0,  status:'進行中',note:''},
-  {task_id:'T3',task_name:'PM 面試安排',        task_type:'專案任務',member:'Cleo',kr_ref:'KR1',level:'L2',est_hours:4,  actual_hours:3,  completion_pct:80, status:'進行中',note:''},
-  {task_id:'T4',task_name:'Offer Letter 草稿',  task_type:'專案任務',member:'Ava', kr_ref:'KR2',level:'L1',est_hours:2,  actual_hours:2.8,completion_pct:100,status:'完成',  note:'範本來回修改'},
-  {task_id:'T5',task_name:'薪資 Benchmark',     task_type:'專案任務',member:'Ben', kr_ref:'KR2',level:'L3',est_hours:8,  actual_hours:9,  completion_pct:50, status:'進行中',note:'數據來源複雜',start_date:'2025-05-10',end_date:''},
-  {task_id:'T6',task_name:'Talent Pool 建立',   task_type:'專案任務',member:'Cleo',kr_ref:'KR1',level:'L3',est_hours:10, actual_hours:0,  completion_pct:0,  status:'未開始',note:''},
-  {task_id:'T7',task_name:'每週 Pipeline Review',task_type:'常態工作',member:'Ava',kr_ref:'',   level:'L1',est_hours:1,  actual_hours:0.8,completion_pct:0,  status:'進行中',note:''},
-  {task_id:'T8',task_name:'面試官培訓簡報',    task_type:'專案任務',member:'Ava', kr_ref:'KR1',level:'L2',est_hours:5,  actual_hours:4.5,completion_pct:100,status:'完成',  note:''},
+function getDemoTasks(){
+  // 新格式：team_kr_ref / member_kr_ref = "quarter | objective | KR_label | 任務指標名稱"
+  const teamKR1Linked='2025 | 拓展被動求才管道 | KR1 | LinkedIn Sourcing';
+  const teamKR1Social='2025 | 拓展被動求才管道 | KR1 | 社群觸及';
+  const teamKR2Survey='2025 | 拓展被動求才管道 | KR2 | 管道調研';
+  const mbpKR1='2025 | 提升個人招募能力與品質 | KR1 | 全流程主導';
+  const mbpKR2='2025 | 提升個人招募能力與品質 | KR2 | 主動承接高難度任務';
+  return[
+  {task_id:'T1',task_name:'Backend JD 撰寫',   task_type:'專案任務',member:'Ava', team_kr_ref:teamKR1Linked,member_kr_ref:mbpKR1,level:'L2',est_hours:3,  actual_hours:2.5,completion_pct:100,status:'完成',  note:'',start_date:'2025-05-01',end_date:'2025-05-03'},
+  {task_id:'T2',task_name:'每日 Sourcing',      task_type:'常態工作', member:'Ben', team_kr_ref:'',           member_kr_ref:'',    level:'L1',est_hours:1,  actual_hours:1.2,completion_pct:0,  status:'進行中',note:''},
+  {task_id:'T3',task_name:'PM 面試安排',        task_type:'專案任務',member:'Cleo',team_kr_ref:teamKR1Linked,member_kr_ref:'',    level:'L2',est_hours:4,  actual_hours:3,  completion_pct:80, status:'進行中',note:'',start_date:'2026-05-01',end_date:'2026-06-01'},
+  {task_id:'T4',task_name:'Offer Letter 草稿',  task_type:'專案任務',member:'Ava', team_kr_ref:teamKR2Survey,member_kr_ref:mbpKR1,level:'L1',est_hours:2,  actual_hours:2.8,completion_pct:100,status:'完成',  note:'範本來回修改',start_date:'2026-04-15',end_date:'2026-05-15'},
+  {task_id:'T5',task_name:'薪資 Benchmark',     task_type:'專案任務',member:'Ben', team_kr_ref:teamKR2Survey,member_kr_ref:mbpKR1,level:'L3',est_hours:8,  actual_hours:9,  completion_pct:50, status:'進行中',note:'數據來源複雜',start_date:'2026-05-10',end_date:'2026-06-10'},
+  {task_id:'T6',task_name:'Talent Pool 建立',   task_type:'專案任務',member:'Cleo',team_kr_ref:teamKR1Linked,member_kr_ref:mbpKR2,level:'L3',est_hours:10, actual_hours:0,  completion_pct:0,  status:'未開始',note:'',start_date:'2027-06-01',end_date:'2027-07-01'},
+  {task_id:'T7',task_name:'每週 Pipeline Review',task_type:'常態工作',member:'Ava',team_kr_ref:'',           member_kr_ref:'',    level:'L1',est_hours:1,  actual_hours:0.8,completion_pct:0,  status:'進行中',note:''},
+  {task_id:'T8',task_name:'面試官培訓簡報',    task_type:'專案任務',member:'Ava', team_kr_ref:teamKR1Social,member_kr_ref:mbpKR1,level:'L2',est_hours:5,  actual_hours:4.5,completion_pct:100,status:'完成',  note:'',start_date:'2026-04-01',end_date:'2026-05-01'},
 ];}
 function getDemoVac(){return[
   // Demo 資料模擬外部缺額表（窗口=Rita, Status=錄取 or 關缺）
@@ -391,8 +415,7 @@ function getDemoPipeline(){return[
 ];}
 function getDemoOKRForQ(q,prefix){
   if(prefix==='okr'){
-    const m={Q3:[{o:'拓展被動求才管道',kr:[{label:'KR1',text:'Talent Pool 人數達 50 人',pct:30,tasks:[{name:'LinkedIn Sourcing',desc:'每週 Outreach 10 人，月底彙整入 ATS。'},{name:'社群觸及',desc:'每月 2 篇雇主品牌內容。'}]},{label:'KR2',text:'建立 2 個新招募管道',pct:10,tasks:[{name:'管道調研',desc:'評估獵頭/校園/內推，產出報告。'}]}]}]};
-    return m[q]||[];
+    return [{o:'拓展被動求才管道',kr:[{label:'KR1',text:'Talent Pool 人數達 50 人',pct:30,tasks:[{name:'LinkedIn Sourcing',desc:'每週 Outreach 10 人，月底彙整入 ATS。'},{name:'社群觸及',desc:'每月 2 篇雇主品牌內容。'}]},{label:'KR2',text:'建立 2 個新招募管道',pct:10,tasks:[{name:'管道調研',desc:'評估獵頭/校園/內推，產出報告。'}]}]}];
   }
   return [{o:'提升個人招募能力與品質',kr:[{label:'KR1',text:'獨立完成 3 個職位全流程',pct:60,tasks:[{name:'全流程主導',desc:'從 JD 撰寫到 Offer 談判，獨立負責至少 3 個職位。'}]},{label:'KR2',text:'L3 任務承擔比例達 30%',pct:20,tasks:[{name:'主動承接高難度任務',desc:'每季主動爭取至少 1 個 L3 等級任務。'}]}]}];
 }
@@ -466,8 +489,20 @@ async function saveOKR(type){
   await loadData();
 }
 
-function renderAll(){renderOKR();renderMbpMemberChips();renderMbpOKR();renderTasks();renderPerfChips();renderPerf();renderDash();renderVacancy();populateVacFilters();renderPipeline();renderLinks();}
-function showTab(id,btn){document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.nitem').forEach(b=>b.classList.remove('on'));document.getElementById('tab-'+id).classList.add('on');btn.classList.add('on');}
+function renderAll(){renderOKR();renderMbpMemberChips();renderMbpOKR();renderTaskMemberChips();renderTasks();renderPerfChips();renderPerf();renderDash();renderVacancy();populateVacFilters();renderPipeline();renderLinks();}
+function renderTaskMemberChips(){
+  const el=document.getElementById('task-member-chips');if(!el)return;
+  el.innerHTML=`<button class="mchip ${activeTaskMember===null?'on':''}" onclick="activeTaskMember=null;renderTaskMemberChips();renderTasks()">全部</button>`
+    +S.members.map(m=>`<button class="mchip ${activeTaskMember===m.name?'on':''}" onclick="activeTaskMember='${m.name}';renderTaskMemberChips();renderTasks()">${esc(m.name)}</button>`).join('');
+}
+function showTab(id,btn){
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nitem').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tab-'+id).classList.add('on');btn.classList.add('on');
+  // 切到 OKR / MBP 時重算 KR 自動進度（取最新任務狀態）
+  if(id==='okr')renderOKR();
+  else if(id==='mbp')renderMbpOKR();
+}
 function setDV(btn){document.querySelectorAll('#tab-dash .bts').forEach(b=>{b.style.background='';b.style.color='';b.style.borderColor='';});btn.style.background='var(--pl)';btn.style.color='var(--pd)';btn.style.borderColor='var(--p)';}
 
 function clearDashDate(){
@@ -508,13 +543,18 @@ function populateVacFilters(){
 
 // ══ HOUR PERF (updated logic) ══
 function hp(t){
+  // 常態工作：一律顯示「常態進行中」，不參與工時績效評估
   if(t.task_type==='常態工作') return{code:'routine',label:'↻ 常態進行中',cls:'hp-routine'};
+  // 專案任務必須先設日期，否則無法評估
+  if(!t.start_date || !t.end_date) return{code:'nodate',label:'📅 待設定日期',cls:'hp-routine'};
+  const today=new Date().toISOString().substring(0,10);
+  if(today < t.start_date) return{code:'notyet',label:'⏳ 未開始',cls:'hp-routine'};
   const p=+t.completion_pct,e=+t.est_hours,a=+t.actual_hours;
   if(p===100&&a<e)   return{code:'early',label:'⚡ 提前完成',cls:'hp-early'};
   if(p===100&&a===e) return{code:'ontime',label:'✓ 準時完成',cls:'hp-ontime'};
   if(p===100&&a>e)   return{code:'over-done',label:'⚠ 超時完成',cls:'hp-over-done'};
   if(a>e)            return{code:'over',label:'✗ 超支未完',cls:'hp-over'};
-  return{code:'na',label:'— 進行中',cls:'hp-na'};
+  return{code:'inprog',label:'⏵ 進行中',cls:'hp-na'};
 }
 function hpScore(tasks){
   const eligible=tasks.filter(t=>t.task_type!=='常態工作'&&+t.completion_pct===100);
@@ -528,6 +568,117 @@ function hpScore(tasks){
 }
 function mcolor(name){const m=S.members.find(m=>m.name===name);return m?m.color:'#888';}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ══ KR 選項（任務工時下拉用）— 對應到「子任務指標」層 ══
+// value 格式：「quarter | objective | KR_label | 任務指標名稱」
+// label 格式：「[quarter] objective _ KR_label _ 任務指標名稱」
+function getTeamKROptions(){
+  const opts=[],seen=new Set();
+  const add=(q,objs)=>(objs||[]).forEach(o=>(o.kr||[]).forEach(k=>{
+    if(!k.label)return;
+    (k.tasks||[]).forEach(task=>{
+      if(!task.name)return;
+      const value=`${q} | ${o.o||''} | ${k.label} | ${task.name}`;
+      if(seen.has(value))return;seen.add(value);
+      const label=`[${q}] ${o.o||'(無 Objective)'} _ ${k.label} _ ${task.name}`;
+      opts.push({value,label});
+    });
+  }));
+  const quarters=new Set();
+  (S.okr||[]).forEach(r=>{if(r.quarter)quarters.add(r.quarter);});
+  Object.keys(okrLocal||{}).forEach(q=>quarters.add(q));
+  if(!quarters.size)quarters.add(document.getElementById('okr-year')?.value||'2025');
+  quarters.forEach(q=>add(q,getOKRLocal(null,q,'okr')));
+  return opts;
+}
+function getMemberKROptions(member){
+  if(!member)return[];
+  const opts=[],seen=new Set();
+  const add=(q,objs)=>(objs||[]).forEach(o=>(o.kr||[]).forEach(k=>{
+    if(!k.label)return;
+    (k.tasks||[]).forEach(task=>{
+      if(!task.name)return;
+      const value=`${q} | ${o.o||''} | ${k.label} | ${task.name}`;
+      if(seen.has(value))return;seen.add(value);
+      const label=`[${q}] ${o.o||'(無 Objective)'} _ ${k.label} _ ${task.name}`;
+      opts.push({value,label});
+    });
+  }));
+  const quarters=new Set();
+  (S.mbp||[]).filter(r=>r.member===member).forEach(r=>{if(r.quarter)quarters.add(r.quarter);});
+  Object.keys(mbpLocal||{}).filter(k=>k.endsWith('_'+member)).forEach(k=>quarters.add(k.slice(0,k.length-('_'+member).length)));
+  if(!quarters.size)quarters.add(document.getElementById('mbp-year')?.value||'2025');
+  quarters.forEach(q=>add(q,getOKRLocal(member,q,'mbp')));
+  return opts;
+}
+
+// 子任務指標自動進度：從工時表中 link 到該指標的任務工時加權平均
+function calcIndAutoPct(q,objName,krLabel,taskName,type,memberFilter){
+  const field=type==='team'?'team_kr_ref':'member_kr_ref';
+  const key=`${q} | ${objName||''} | ${krLabel||''} | ${taskName||''}`;
+  const related=S.tasks.filter(t=>{
+    if(t.task_type==='常態工作')return false;
+    if((t[field]||'')!==key)return false;
+    if(memberFilter&&t.member!==memberFilter)return false;
+    return true;
+  });
+  if(!related.length)return 0;
+  const totalW=related.reduce((s,t)=>s+Math.max(+t.est_hours||0,1),0);
+  const weighted=related.reduce((s,t)=>s+(+t.completion_pct||0)*Math.max(+t.est_hours||0,1),0);
+  return Math.round(weighted/totalW);
+}
+// 任務指標當前顯示進度（依 pct_mode）
+function getIndPct(q,objName,krLabel,task,type,memberFilter){
+  if(task.pct_mode==='manual')return +task.pct||0;
+  return calcIndAutoPct(q,objName,krLabel,task.name,type,memberFilter);
+}
+// KR 自動進度：所有子任務指標進度的平均（沒子任務時為 0）
+function calcKRAutoPct(q,objName,kr,type,memberFilter){
+  if(!kr.tasks||!kr.tasks.length)return 0;
+  const sum=kr.tasks.reduce((s,task)=>s+getIndPct(q,objName,kr.label,task,type,memberFilter),0);
+  return Math.round(sum/kr.tasks.length);
+}
+// 從 fullKey 解析出 quarter 與 member（MBP 才有 member）
+function parseKRFullKey(store,fullKey){
+  if(store==='okrLocal')return{q:fullKey,member:null};
+  const idx=fullKey.lastIndexOf('_');
+  return{q:fullKey.substring(0,idx),member:fullKey.substring(idx+1)};
+}
+// 切換 KR auto/manual 模式
+function switchKRMode(store,fullKey,oi,ki,mode){
+  const storeObj=store==='okrLocal'?okrLocal:mbpLocal;
+  const obj=storeObj[fullKey][oi];
+  const kr=obj.kr[ki];
+  if(mode==='manual'&&kr.pct_mode!=='manual'){
+    const{q,member}=parseKRFullKey(store,fullKey);
+    kr.pct=calcKRAutoPct(q,obj.o,kr,store==='okrLocal'?'team':'member',member);
+  }
+  kr.pct_mode=mode;
+  if(store==='okrLocal')renderOKR();else renderMbpOKR();
+}
+// 切換子任務指標 auto/manual 模式
+function switchIndMode(store,fullKey,oi,ki,ti,mode){
+  const storeObj=store==='okrLocal'?okrLocal:mbpLocal;
+  const obj=storeObj[fullKey][oi];const kr=obj.kr[ki];const task=kr.tasks[ti];
+  if(mode==='manual'&&task.pct_mode!=='manual'){
+    const{q,member}=parseKRFullKey(store,fullKey);
+    task.pct=calcIndAutoPct(q,obj.o,kr.label,task.name,store==='okrLocal'?'team':'member',member);
+  }
+  task.pct_mode=mode;
+  if(store==='okrLocal')renderOKR();else renderMbpOKR();
+}
+// Objective 進度 = 所有 KR 進度的平均（每個 KR 自己決定 auto/manual）
+function calcObjAutoPct(obj,store,fullKey){
+  if(!obj.kr||!obj.kr.length)return 0;
+  const{q,member}=parseKRFullKey(store,fullKey);
+  const krType=store==='okrLocal'?'team':'member';
+  const sum=obj.kr.reduce((s,kr)=>{
+    const isAuto=kr.pct_mode!=='manual';
+    const pct=isAuto?calcKRAutoPct(q,obj.o,kr,krType,member):(+kr.pct||0);
+    return s+pct;
+  },0);
+  return Math.round(sum/obj.kr.length);
+}
 
 // ══ OKR (shared for Team + Member Blueprint) ══
 function getOKRLocal(key,q,type){
@@ -557,21 +708,52 @@ function buildOKRRows(data,q,member){
   return rows;
 }
 function renderOKRBlock(data,store,fullKey,q,addFn,saveFn){
-  return data.map((obj,oi)=>`
+  const{q:qPart,member:memberFilter}=parseKRFullKey(store,fullKey);
+  const krType=store==='okrLocal'?'team':'member';
+  return data.map((obj,oi)=>{
+    const objPct=calcObjAutoPct(obj,store,fullKey);
+    const objColor=objPct>=100?'var(--t)':objPct>=50?'var(--p)':'var(--a)';
+    return `
     <div class="obj-block"><div class="obj-hd"><span class="obj-lbl">Objective</span>
       <input class="ic" value="${esc(obj.o)}" onchange="${store}['${fullKey}'][${oi}].o=this.value" style="background:transparent;border-color:rgba(127,119,221,.3);color:var(--pd);font-weight:600;font-size:13px;flex:1">
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <div style="width:60px;background:rgba(255,255,255,.6);border-radius:100px;height:5px;overflow:hidden"><div style="height:5px;background:${objColor};width:${objPct}%"></div></div>
+        <span style="font-size:11px;font-weight:600;color:${objColor};min-width:32px;text-align:right">${objPct}%</span>
+        <span style="font-size:9px;padding:1px 6px;background:#fff;color:var(--pd);border-radius:100px">自動</span>
+      </div>
       <button class="delbtn" onclick="${store}['${fullKey}'].splice(${oi},1);${saveFn}()" style="color:var(--pd)">×</button></div>
-    <div class="obj-bd">${obj.kr.map((kr,ki)=>`
-      <div class="kr-row"><span class="kr-lbl">${kr.label}</span><div class="kr-ct">
+    <div class="obj-bd">${obj.kr.map((kr,ki)=>{
+      const isAuto=kr.pct_mode!=='manual';
+      const autoPct=calcKRAutoPct(qPart,obj.o,kr,krType,memberFilter);
+      const displayPct=isAuto?autoPct:(+kr.pct||0);
+      const barColor=displayPct>=100?'var(--t)':displayPct>=50?'var(--p)':'var(--a)';
+      const progressBar=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:10px">
+        <div style="flex:1;background:var(--bg);border-radius:100px;height:6px;overflow:hidden"><div style="height:6px;background:${barColor};width:${Math.min(displayPct,100)}%;transition:width .2s"></div></div>
+        ${isAuto
+          ? `<span style="color:var(--muted);min-width:32px;text-align:right">${displayPct}%</span>
+             <span style="font-size:9px;padding:1px 6px;background:var(--gnl);color:var(--gnd);border-radius:100px">自動</span>
+             <button onclick="switchKRMode('${store}','${fullKey}',${oi},${ki},'manual')" style="font-size:9px;padding:2px 6px;border:.5px solid var(--bdr);background:none;border-radius:4px;cursor:pointer;color:var(--muted)" title="切為手動覆寫">✎ 編輯</button>`
+          : `<input type="number" min="0" max="100" step="5" value="${displayPct}" style="width:50px;font-size:11px;padding:1px 4px;border:.5px solid var(--bdr);border-radius:4px;text-align:right" onchange="${store}['${fullKey}'][${oi}].kr[${ki}].pct=Math.max(0,Math.min(100,parseInt(this.value)||0));${saveFn}()">
+             <span style="color:var(--muted)">%</span>
+             <span style="font-size:9px;padding:1px 6px;background:var(--al);color:var(--ad);border-radius:100px">手動</span>
+             <button onclick="switchKRMode('${store}','${fullKey}',${oi},${ki},'auto')" style="font-size:9px;padding:2px 6px;border:.5px solid var(--bdr);background:none;border-radius:4px;cursor:pointer;color:var(--muted)" title="切回自動計算">↻ 自動</button>`}
+      </div>`;
+      return `<div class="kr-row"><span class="kr-lbl">${kr.label}</span><div class="kr-ct">
         <input class="ic" value="${esc(kr.text)}" onchange="${store}['${fullKey}'][${oi}].kr[${ki}].text=this.value" style="width:100%;margin-bottom:6px">
-
+        ${progressBar}
         <div style="font-size:10px;color:var(--muted);margin-bottom:5px">任務指標 <span style="color:var(--p)">（點入查看）</span></div>
-        <div class="kr-tasks">${kr.tasks.map((t,ti)=>`<span class="kr-chip" onclick="openKRTask('${store}','${fullKey}',${oi},${ki},${ti})">📄 ${esc(t.name)}</span>`).join('')}
-          <button class="addkr" onclick="${store}['${fullKey}'][${oi}].kr[${ki}].tasks.push({name:'新任務指標',desc:''});${saveFn}()">＋</button>
+        <div class="kr-tasks">${kr.tasks.map((t,ti)=>{
+          const indIsAuto=t.pct_mode!=='manual';
+          const indPct=indIsAuto?calcIndAutoPct(qPart,obj.o,kr.label,t.name,krType,memberFilter):(+t.pct||0);
+          return `<span class="kr-chip" onclick="openKRTask('${store}','${fullKey}',${oi},${ki},${ti})">📄 ${esc(t.name)} <span style="opacity:.65;font-weight:500">${indPct}%</span><span style="font-size:8px;margin-left:3px;opacity:.6">${indIsAuto?'自':'手'}</span></span>`;
+        }).join('')}
+          <button class="addkr" onclick="${store}['${fullKey}'][${oi}].kr[${ki}].tasks.push({name:'新任務指標',desc:'',pct:0,pct_mode:'auto'});${saveFn}()">＋</button>
         </div></div>
-        <button class="delbtn" onclick="${store}['${fullKey}'][${oi}].kr.splice(${ki},1);${saveFn}()">×</button></div>`).join('')}
-      <button class="addkr" style="margin-top:6px" onclick="(()=>{const n=${store}['${fullKey}'][${oi}].kr.length+1;${store}['${fullKey}'][${oi}].kr.push({label:'KR'+n,text:'',pct:0,tasks:[]});${saveFn}();})()">＋ 新增 KR</button>
-    </div></div>`).join('')||'<div style="padding:30px;text-align:center;color:var(--muted)">尚無 Objective，點右上角新增</div>';
+        <button class="delbtn" onclick="${store}['${fullKey}'][${oi}].kr.splice(${ki},1);${saveFn}()">×</button></div>`;
+    }).join('')}
+      <button class="addkr" style="margin-top:6px" onclick="(()=>{const n=${store}['${fullKey}'][${oi}].kr.length+1;${store}['${fullKey}'][${oi}].kr.push({label:'KR'+n,text:'',pct:0,pct_mode:'auto',tasks:[]});${saveFn}();})()">＋ 新增 KR</button>
+    </div></div>`;
+  }).join('')||'<div style="padding:30px;text-align:center;color:var(--muted)">尚無 Objective，點右上角新增</div>';
 }
 function renderOKR(){
   const q=document.getElementById('okr-year').value;
@@ -584,11 +766,36 @@ function addObj(type){
 }
 function openKRTask(store,fullKey,oi,ki,ti){
   const storeObj=store==='okrLocal'?okrLocal:mbpLocal;
-  const task=storeObj[fullKey][oi].kr[ki].tasks[ti],kr=storeObj[fullKey][oi].kr[ki];
+  const obj=storeObj[fullKey][oi];
+  const kr=obj.kr[ki];
+  const task=kr.tasks[ti];
+  const{q:qPart,member}=parseKRFullKey(store,fullKey);
+  const type=store==='okrLocal'?'team':'member';
+  // KR 進度
+  const krIsAuto=kr.pct_mode!=='manual';
+  const krPct=krIsAuto?calcKRAutoPct(qPart,obj.o,kr,type,member):(+kr.pct||0);
+  // 子任務指標進度
+  const indIsAuto=task.pct_mode!=='manual';
+  const indAutoPct=calcIndAutoPct(qPart,obj.o,kr.label,task.name,type,member);
+  const indPct=indIsAuto?indAutoPct:(+task.pct||0);
   openMdl('任務指標說明',`
     <div style="margin-bottom:12px"><div class="ml" style="margin-bottom:4px">指標名稱</div><input class="ic" style="width:100%;font-size:13px;font-weight:500" value="${esc(task.name)}" onchange="${store}['${fullKey}'][${oi}].kr[${ki}].tasks[${ti}].name=this.value"></div>
+    <div style="margin-bottom:12px">
+      <div class="ml" style="margin-bottom:4px">完成度</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${indIsAuto
+          ?`<span style="font-size:16px;font-weight:600;color:var(--pd)">${indPct}%</span>
+            <span style="font-size:10px;padding:2px 8px;background:var(--gnl);color:var(--gnd);border-radius:100px">自動</span>
+            <span style="font-size:11px;color:var(--muted)">從工時表 link 的任務算出</span>
+            <button onclick="closeMdl(null);switchIndMode('${store}','${fullKey}',${oi},${ki},${ti},'manual')" style="font-size:10px;padding:3px 10px;border:.5px solid var(--bdr);background:none;border-radius:4px;cursor:pointer;margin-left:auto">✎ 改為手動</button>`
+          :`<input type="number" class="ic" min="0" max="100" step="5" value="${+task.pct||0}" style="width:80px;font-size:14px;text-align:right;font-weight:600" onchange="${store}['${fullKey}'][${oi}].kr[${ki}].tasks[${ti}].pct=Math.max(0,Math.min(100,parseInt(this.value)||0));${store==='okrLocal'?'renderOKR':'renderMbpOKR'}()">
+            <span style="font-size:12px;color:var(--muted)">%</span>
+            <span style="font-size:10px;padding:2px 8px;background:var(--al);color:var(--ad);border-radius:100px">手動</span>
+            <button onclick="closeMdl(null);switchIndMode('${store}','${fullKey}',${oi},${ki},${ti},'auto')" style="font-size:10px;padding:3px 10px;border:.5px solid var(--bdr);background:none;border-radius:4px;cursor:pointer;margin-left:auto">↻ 切回自動</button>`}
+      </div>
+    </div>
     <div style="margin-bottom:16px"><div class="ml" style="margin-bottom:4px">說明細節</div><textarea class="ic" rows="5" style="width:100%;resize:vertical;font-size:12px;line-height:1.6" onchange="${store}['${fullKey}'][${oi}].kr[${ki}].tasks[${ti}].desc=this.value">${esc(task.desc)}</textarea></div>
-    <div style="background:var(--pl);border-radius:8px;padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;font-weight:600;color:var(--pd);margin-bottom:4px">所屬 KR</div><div style="font-size:12px;color:var(--pd)">${esc(kr.text)||'（尚未填寫）'}</div><div style="font-size:10px;color:var(--pd);margin-top:4px">達成進度：${kr.pct}%</div></div>
+    <div style="background:var(--pl);border-radius:8px;padding:10px 12px;margin-bottom:14px"><div style="font-size:10px;font-weight:600;color:var(--pd);margin-bottom:4px">所屬 KR</div><div style="font-size:12px;color:var(--pd)">${esc(kr.text)||'（尚未填寫）'}</div><div style="font-size:10px;color:var(--pd);margin-top:4px">KR 達成進度：${krPct}% <span style="font-size:9px;padding:1px 6px;background:#fff;color:var(--pd);border-radius:100px;margin-left:4px">${krIsAuto?'自動':'手動'}</span></div></div>
     <div style="display:flex;justify-content:space-between"><button class="btn" style="color:var(--c);border-color:var(--c)" onclick="${store}['${fullKey}'][${oi}].kr[${ki}].tasks.splice(${ti},1);closeMdl(null);${store==='okrLocal'?'renderOKR':'renderMbpOKR'}()">刪除</button><button class="btn btp" onclick="closeMdl(null);${store==='okrLocal'?'renderOKR':'renderMbpOKR'}()">✓ 儲存關閉</button></div>`);
 }
 
@@ -606,52 +813,73 @@ function renderMbpOKR(){
 
 // ══ TASKS ══
 function onStatus(id,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t.status=v;if(t.task_type!=='常態工作'){if(v==='完成')t.completion_pct=100;if(v==='未開始')t.completion_pct=0;}pendingTasks[id]=t;renderTasks();}
-function onField(id,f,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t[f]=v;pendingTasks[id]=t;}
-function onTypeChange(id,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t.task_type=v;if(v==='常態工作'){t.completion_pct=0;t.status='進行中';}pendingTasks[id]=t;renderTasks();}
+function onField(id,f,v){
+  const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t[f]=v;pendingTasks[id]=t;
+  // 影響 KR / Objective 自動進度的欄位變更時，立即重算 OKR / MBP 顯示
+  if(['completion_pct','team_kr_ref','member_kr_ref','est_hours','task_type'].includes(f)){
+    try{renderOKR();}catch(e){}
+    try{renderMbpOKR();}catch(e){}
+  }
+}
+function onTypeChange(id,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t.task_type=v;if(v==='常態工作')t.completion_pct=0;pendingTasks[id]=t;renderTasks();}
 
 function renderTasks(){
   const _so={early:3,ontime:3,'over-done':3,over:1,na:1,routine:2};
-  const _ts=[...S.tasks].sort((a,b)=>(_so[hp(a).code]||1)-(_so[hp(b).code]||1));
+  const _ts=[...S.tasks]
+    .filter(t=>!activeTaskMember||t.member===activeTaskMember)
+    .sort((a,b)=>(_so[hp(a).code]||1)-(_so[hp(b).code]||1));
+  const teamOpts=getTeamKROptions();
   document.getElementById('task-body').innerHTML=_ts.map(t=>{
-    const h=hp(t),p=+t.completion_pct,e=+t.est_hours,a=+t.actual_hours;
+    const h=hp(t);
     const isRoutine=t.task_type==='常態工作';
-    const locked=!isRoutine&&(t.status==='完成'||t.status==='未開始');
+    // notyet / nodate 強制完成度為 0
+    if(!isRoutine&&(h.code==='notyet'||h.code==='nodate')&&+t.completion_pct!==0){t.completion_pct=0;pendingTasks[t.task_id]=t;}
+    const p=+t.completion_pct,e=+t.est_hours,a=+t.actual_hours;
+    const locked=!isRoutine&&(h.code==='notyet'||h.code==='nodate');
+    const actualLocked=h.code==='nodate'; // 缺日期 → 鎖實際 h
+    const lockLabel=h.code==='nodate'?'待設日期':'未開始';
     const isOver=a>e;
     const overPct=e>0?Math.round((a-e)/e*100):0;
     const bc=p===100?'var(--t)':p>=50?'var(--p)':'var(--a)';
+    const memberOpts=getMemberKROptions(t.member);
+    const krStyle='width:116px;font-size:11px';
+    const teamKrSelect=`<select class="ic" onchange="onField('${t.task_id}','team_kr_ref',this.value)" style="${krStyle}" ${isRoutine?'disabled':''}><option value="">— 選 Team KR —</option>${teamOpts.map(o=>`<option value="${esc(o.value)}" title="${esc(o.label)}" ${t.team_kr_ref===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}</select>`;
+    const memberKrSelect=`<select class="ic" onchange="onField('${t.task_id}','member_kr_ref',this.value)" style="${krStyle}" ${isRoutine?'disabled':''}><option value="">— 選個人 KR —</option>${memberOpts.map(o=>`<option value="${esc(o.value)}" title="${esc(o.label)}" ${t.member_kr_ref===o.value?'selected':''}>${esc(o.label)}</option>`).join('')}</select>`;
     return`<tr class="${isOver&&!isRoutine?'warn-row':isRoutine?'routine-row':''}">
       <td><input class="ic" value="${esc(t.task_name)}" onchange="onField('${t.task_id}','task_name',this.value)" style="width:102px;font-size:11px"></td>
       <td><select class="ic" onchange="onTypeChange('${t.task_id}',this.value)" style="width:64px;font-size:11px">
         <option ${t.task_type==='專案任務'?'selected':''}>專案任務</option>
         <option ${t.task_type==='常態工作'?'selected':''}>常態工作</option>
       </select></td>
-      <td><select class="ic" onchange="onField('${t.task_id}','member',this.value)" style="width:46px;font-size:11px">${S.members.map(m=>`<option ${t.member===m.name?'selected':''}>${m.name}</option>`).join('')}</select></td>
-      <td><input class="ic" value="${esc(t.kr_ref||'')}" onchange="onField('${t.task_id}','kr_ref',this.value)" style="width:92px;font-size:11px" ${isRoutine?'disabled':''}></td>
+      <td><select class="ic" onchange="onField('${t.task_id}','member',this.value);onField('${t.task_id}','member_kr_ref','');renderTasks()" style="width:46px;font-size:11px">${S.members.map(m=>`<option ${t.member===m.name?'selected':''}>${m.name}</option>`).join('')}</select></td>
+      <td>${teamKrSelect}</td>
+      <td>${memberKrSelect}</td>
       <td><select class="ic" onchange="onField('${t.task_id}','level',this.value)" style="width:38px;font-size:11px">${['L1','L2','L3'].map(l=>`<option ${t.level===l?'selected':''}>${l}</option>`).join('')}</select></td>
       <td><input type="number" class="ic" value="${e}" min="0" step=".5" style="width:44px;font-size:11px" onchange="onField('${t.task_id}','est_hours',parseFloat(this.value)||0);renderTasks()"></td>
       <td>
-        <input type="number" class="ic" value="${a}" min="0" step=".5" style="width:44px;font-size:11px;${isOver&&!isRoutine?'border-color:var(--c);color:var(--cd)':''}" onchange="onField('${t.task_id}','actual_hours',parseFloat(this.value)||0);renderTasks()">
-        ${isOver&&!isRoutine?`<div style="font-size:9px;color:var(--c)">+${overPct}%</div>`:''}
+        ${actualLocked
+          ? `<span style="font-size:11px;color:var(--muted)">—</span><div style="font-size:9px;color:var(--a);margin-top:1px">需先設日期</div>`
+          : `<input type="number" class="ic" value="${a}" min="0" step=".5" style="width:44px;font-size:11px;${isOver&&!isRoutine?'border-color:var(--c);color:var(--cd)':''}" onchange="onField('${t.task_id}','actual_hours',parseFloat(this.value)||0);renderTasks()">${isOver&&!isRoutine?`<div style="font-size:9px;color:var(--c)">+${overPct}%</div>`:''}`}
       </td>
-      <td><input type="date" class="ic" value="${esc(t.start_date||'')}" onchange="onField('${t.task_id}','start_date',this.value)" style="width:88px;font-size:11px"></td>
-      <td><input type="date" class="ic" value="${esc(t.end_date||'')}" onchange="onField('${t.task_id}','end_date',this.value)" style="width:88px;font-size:11px"></td>
+      <td><input type="date" class="ic" value="${esc(t.start_date||'')}" onchange="onField('${t.task_id}','start_date',this.value);renderTasks()" style="width:88px;font-size:11px;${!isRoutine&&!t.start_date?'border-color:var(--c)':''}"></td>
+      <td><input type="date" class="ic" value="${esc(t.end_date||'')}" onchange="onField('${t.task_id}','end_date',this.value);renderTasks()" style="width:88px;font-size:11px;${!isRoutine&&!t.end_date?'border-color:var(--c)':''}"></td>
       <td>
         ${isRoutine?`<div style="font-size:10px;color:var(--muted);font-style:italic">常態累計工時</div>`:`
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px"><span style="font-size:10px;font-weight:500;color:${bc}">${p}%</span>${locked?`<span class="lock-pill">🔒</span>`:''}</div>
+        <div style="display:inline-flex;align-items:center;gap:4px;margin-bottom:3px">
+          ${locked
+            ?`<span style="font-size:11px;font-weight:500;color:${bc}">${p}%</span><span class="lock-pill">🔒</span>`
+            :`<input type="number" min="0" max="100" step="5" value="${p}" style="width:54px;font-size:11px;padding:2px 4px;border:.5px solid var(--bdr);border-radius:4px;text-align:right" onchange="onField('${t.task_id}','completion_pct',Math.max(0,Math.min(100,parseInt(this.value)||0)));pendingTasks['${t.task_id}']=S.tasks.find(x=>x.task_id==='${t.task_id}');renderTasks()"><span style="font-size:11px;color:${bc}">%</span>`}
+        </div>
         <div class="pw" style="height:5px"><div class="pb" style="width:${p}%;height:5px;background:${bc}"></div></div>
-        ${!locked?`<input type="range" min="0" max="100" value="${p}" step="5" style="width:100%;margin-top:2px" onchange="onField('${t.task_id}','completion_pct',parseInt(this.value));pendingTasks['${t.task_id}']=S.tasks.find(x=>x.task_id==='${t.task_id}');renderTasks()">`:
-        `<div style="font-size:9px;color:var(--muted);margin-top:1px">「${t.status}」鎖定</div>`}`}
+        ${locked?`<div style="font-size:9px;color:var(--muted);margin-top:1px">「${lockLabel}」鎖定</div>`:''}`}
       </td>
       <td><span class="bdg ${h.cls}" style="font-size:10px;white-space:nowrap">${h.label}</span></td>
-      <td>${isRoutine?`<span class="bdg bg2" style="font-size:10px">常態進行中</span>`:`
-        <select class="ic" onchange="onStatus('${t.task_id}',this.value)" style="width:54px;font-size:11px">${['完成','進行中','未開始'].map(s=>`<option ${t.status===s?'selected':''}>${s}</option>`).join('')}</select>`}
-      </td>
       <td><input class="ic" value="${esc(t.note||'')}" placeholder="${isOver&&!isRoutine?'請填寫原因…':''}" onchange="onField('${t.task_id}','note',this.value)" style="width:102px;font-size:11px;${isOver&&!isRoutine&&!t.note?'border-color:var(--a)':''}"></td>
       <td><button class="delbtn" onclick="(async()=>{S.tasks=S.tasks.filter(x=>x.task_id!=='${t.task_id}');delete pendingTasks['${t.task_id}'];renderTasks();if(!S.demo)await apiPost({action:'deleteTask',data:{task_id:'${t.task_id}'}});})()">×</button></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:20px">尚無任務，點右上角新增</td></tr>';
+  }).join('')||'<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">尚無任務，點右上角新增</td></tr>';
 }
-function addTask(){const t={task_id:'T'+Date.now(),task_name:'新任務',task_type:'專案任務',member:S.members[0]?.name||'',kr_ref:'',level:'L1',est_hours:2,actual_hours:0,completion_pct:0,status:'未開始',note:''};S.tasks.push(t);pendingTasks[t.task_id]=t;renderTasks();}
+function addTask(){const t={task_id:'T'+Date.now(),task_name:'新任務',task_type:'專案任務',member:S.members[0]?.name||'',team_kr_ref:'',member_kr_ref:'',level:'L1',est_hours:2,actual_hours:0,completion_pct:0,status:'未開始',note:''};S.tasks.push(t);pendingTasks[t.task_id]=t;renderTasks();}
 
 // ══ DASH ══
 function renderDash(){
@@ -659,14 +887,19 @@ function renderDash(){
   const _mName=dashViewMode==='member'&&typeof dashMbrIdx!=='undefined'?S.members[dashMbrIdx]?.name:null;
   const allRegular=S.tasks.filter(t=>t.task_type!=='常態工作'&&(!_mName||t.member===_mName));
   const regularTasks=allRegular.filter(t=>taskInRange(t,dateFilter));
-  const done=regularTasks.filter(t=>t.status==='完成');
-  const inprog=regularTasks.filter(t=>t.status==='進行中');
+  // 依「工時表現」自動判斷（取代手動狀態）；三者互斥、加起來 = 專案任務總數
+  const DONE_CODES=['early','ontime','over-done'];
+  const INPROG_CODES=['inprog','over'];
+  const NOSTART_CODES=['notyet','nodate'];
+  const done=regularTasks.filter(t=>DONE_CODES.includes(hp(t).code));
+  const inprog=regularTasks.filter(t=>INPROG_CODES.includes(hp(t).code));
+  const notstart=regularTasks.filter(t=>NOSTART_CODES.includes(hp(t).code));
   const routineTasks=S.tasks.filter(t=>t.task_type==='常態工作');
   const overT=S.tasks.filter(t=>t.task_type!=='常態工作'&&+t.actual_hours>+t.est_hours);
   const showMember=dashViewMode==='member';
   const activeDashMember=showMember?S.members[dashMbrIdx]:null;
   const mStats=S.members.map(m=>{
-    const mt=regularTasks.filter(t=>t.member===m.name),md=mt.filter(t=>t.status==='完成');
+    const mt=regularTasks.filter(t=>t.member===m.name),md=mt.filter(t=>DONE_CODES.includes(hp(t).code));
     const rt=routineTasks.filter(t=>t.member===m.name);
     const routineHours=rt.reduce((s,t)=>s+(+t.actual_hours||0),0);
     return{name:m.name,color:m.color,total:mt.length,done:md.length,
@@ -685,7 +918,8 @@ function renderDash(){
       <div class="mc"><div class="ml">專案任務總數</div><div class="mv">${regularTasks.length}</div></div>
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('done')"><div class="ml">已完成 <span style="font-size:9px;color:var(--t)">▸ 明細</span></div><div class="mv" style="color:var(--t)">${done.length}</div></div>
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('inprog')"><div class="ml">進行中 <span style="font-size:9px;color:var(--p)">▸ 明細</span></div><div class="mv" style="color:var(--p)">${inprog.length}</div></div>
-      <div class="mc" style="cursor:pointer" onclick="openDashDetail('over')"><div class="ml">超時完成 <span style="font-size:9px;color:var(--a)">▸ 明細</span></div><div class="mv" style="color:var(--a)">${regularTasks.filter(t=>hp(t).code==='over-done').length}</div></div>
+      <div class="mc" style="cursor:pointer" onclick="openDashDetail('notstart')"><div class="ml">未開始 <span style="font-size:9px;color:var(--muted)">▸ 明細</span></div><div style="font-size:9px;color:var(--muted);margin-top:-2px;margin-bottom:2px;font-style:italic">未到日期 / 待設日期</div><div class="mv" style="color:var(--muted)">${notstart.length}</div></div>
+      <div class="mc" style="cursor:pointer" onclick="openDashDetail('over')"><div class="ml">超時完成 <span style="font-size:9px;color:var(--a)">▸ 明細</span></div><div style="font-size:9px;color:var(--a);margin-top:-2px;margin-bottom:2px;font-style:italic">⚠ 已完成中的警訊</div><div class="mv" style="color:var(--a)">${regularTasks.filter(t=>hp(t).code==='over-done').length}</div></div>
     </div>
     ${(()=>{
     const mn=showMember&&activeDashMember?activeDashMember.name:null;
@@ -712,18 +946,23 @@ function renderPerfChips(){document.getElementById('perf-chips').innerHTML=S.mem
 function renderPerf(){
   const m=S.members[activePerf];if(!m)return;
   const regularTasks=S.tasks.filter(t=>t.member===m.name&&t.task_type!=='常態工作');
-  const done=regularTasks.filter(t=>t.status==='完成');
+  const done=regularTasks.filter(t=>['early','ontime','over-done'].includes(hp(t).code));
   const cr=regularTasks.length?Math.round(done.length/regularTasks.length*100):0;
   const l3=regularTasks.length?Math.round(regularTasks.filter(t=>t.level==='L3').length/regularTasks.length*100):0;
   const ha=hpScore(regularTasks)||0;
-  const krl=regularTasks.length?Math.round(regularTasks.filter(t=>t.kr_ref&&t.kr_ref.length>2).length/regularTasks.length*100):0;
+  // KR 連結度 = Team OKR × 個人 KR 綜合評分：兩個都連結=100、只連結一邊=50、都沒=0，再取平均
+  const krl=regularTasks.length?Math.round(regularTasks.reduce((s,t)=>{
+    const hasTeam  =!!(t.team_kr_ref  &&String(t.team_kr_ref).trim());
+    const hasMember=!!(t.member_kr_ref&&String(t.member_kr_ref).trim());
+    return s+(hasTeam?50:0)+(hasMember?50:0);
+  },0)/regularTasks.length):0;
   const routineTasks=S.tasks.filter(t=>t.member===m.name&&t.task_type==='常態工作');
   const routineHours=routineTasks.reduce((s,t)=>s+(+t.actual_hours||0),0);
   const dims=[
     {label:'任務完成率',val:cr, target:80,w:WEIGHTS.compRate},
     {label:'L3 承擔比例',val:l3, target:30,w:WEIGHTS.l3},
     {label:'工時準確度', val:ha, target:75,w:WEIGHTS.hourAcc},
-    {label:'個人 KR 連結度',val:krl,target:70,w:WEIGHTS.krLink},
+    {label:'Team OKR × 個人 KR 連結度',val:krl,target:70,w:WEIGHTS.krLink},
   ];
   const score=Math.round(dims.reduce((s,d)=>s+d.val*d.w,0));
   const promote=score>=PROMOTE_THRESHOLD;
@@ -749,7 +988,6 @@ function renderPerf(){
       </div>
       <div class="card">
         <div class="sec" style="margin-bottom:10px">各維度評分</div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:10px">完成率 30% · L3 20% · 工時準確度 30% · KR 連結 20%</div>
         ${dims.map(d=>{const bc=d.val>=d.target?'var(--t)':d.val>=d.target*.6?m.color:'var(--c)';return`<div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
             <span style="color:var(--muted)">${d.label} <span style="font-size:9px">(${Math.round(d.w*100)}%)</span></span>
@@ -761,17 +999,36 @@ function renderPerf(){
       </div>
     </div>
     <div class="card" style="margin-top:2px"><div class="sec" style="margin-bottom:10px">任務明細（僅專案任務）</div>
-      <table><thead><tr><th>任務</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>預估h</th><th>實際h</th><th>差異</th><th>備註</th></tr></thead>
+      <div style="overflow-x:auto">
+      <table style="min-width:1100px"><thead><tr>
+        <th>任務名稱</th>
+        <th>Team OKR_KR</th>
+        <th>個人 KR</th>
+        <th>難易度</th>
+        <th>預估h</th>
+        <th>實際h</th>
+        <th>差異</th>
+        <th>起始日期</th>
+        <th>結束日期</th>
+        <th>完成度</th>
+        <th>工時表現</th>
+        <th>修正說明</th>
+      </tr></thead>
       <tbody>${regularTasks.map(t=>{const h=hp(t),e=+t.est_hours,a=+t.actual_hours,diff=(a-e).toFixed(1),p=+t.completion_pct;return`<tr class="${+t.actual_hours>+t.est_hours?'warn-row':''}">
         <td style="font-size:11px">${esc(t.task_name)}</td>
+        <td style="font-size:10px;color:var(--muted)" title="${esc(t.team_kr_ref||'')}">${esc(t.team_kr_ref||'—')}</td>
+        <td style="font-size:10px;color:var(--muted)" title="${esc(t.member_kr_ref||'')}">${esc(t.member_kr_ref||'—')}</td>
         <td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td>
-        <td><div style="font-size:10px">${p}%</div><div class="pw" style="height:4px"><div class="pb" style="width:${p}%;height:4px;background:${p===100?'var(--t)':p>=50?m.color:'var(--a)'}"></div></div></td>
-        <td><span class="bdg ${h.cls}">${h.label}</span></td>
         <td style="font-size:11px">${e}h</td>
         <td style="font-size:11px;color:${parseFloat(diff)>0?'var(--cd)':'var(--td)'};font-weight:500">${a}h</td>
         <td style="font-size:11px;color:${parseFloat(diff)>0?'var(--c)':'var(--t)'}">${parseFloat(diff)>0?'+':''}${diff}h</td>
+        <td style="font-size:11px;color:var(--muted)">${esc(t.start_date||'—')}</td>
+        <td style="font-size:11px;color:var(--muted)">${esc(t.end_date||'—')}</td>
+        <td><div style="font-size:10px">${p}%</div><div class="pw" style="height:4px"><div class="pb" style="width:${p}%;height:4px;background:${p===100?'var(--t)':p>=50?m.color:'var(--a)'}"></div></div></td>
+        <td><span class="bdg ${h.cls}">${h.label}</span></td>
         <td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td>
       </tr>`;}).join('')}</tbody></table>
+      </div>
       ${routineTasks.length?`<div style="margin-top:12px;padding-top:10px;border-top:.5px solid var(--bdr)">
         <div class="sec" style="margin-bottom:6px">常態工作工時累計</div>
         ${routineTasks.map(t=>`<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;color:var(--muted)"><span>↻ ${esc(t.task_name)}</span><span>${t.actual_hours}h 累計</span></div>`).join('')}
@@ -945,13 +1202,15 @@ function switchVTab(tab){
 function openDashDetail(type){
   const mName=dashViewMode==='member'?S.members[dashMbrIdx]?.name:null;
   const base=mName?S.tasks.filter(t=>t.member===mName):S.tasks;
-  const done=base.filter(t=>t.status==='完成'&&t.task_type!=='常態工作');
-  const inprog=base.filter(t=>t.status==='進行中'&&t.task_type!=='常態工作');
+  const done=base.filter(t=>t.task_type!=='常態工作'&&['early','ontime','over-done'].includes(hp(t).code));
+  const inprog=base.filter(t=>t.task_type!=='常態工作'&&['inprog','over'].includes(hp(t).code));
+  const notstart=base.filter(t=>t.task_type!=='常態工作'&&['notyet','nodate'].includes(hp(t).code));
   const overDone=base.filter(t=>hp(t).code==='over-done');
   let tasks,title;
   const sfx=mName?` — ${mName}`:'';
   if(type==='done'){tasks=done;title=`已完成任務（${done.length} 筆）${sfx}`;}
   else if(type==='inprog'){tasks=inprog;title=`進行中任務（${inprog.length} 筆）${sfx}`;}
+  else if(type==='notstart'){tasks=notstart;title=`未開始任務（${notstart.length} 筆）${sfx}`;}
   else{tasks=overDone;title=`超時完成任務（${overDone.length} 筆）${sfx}`;}
   openMdl(title,`<table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>預估h</th><th>實際h</th><th>備註</th></tr></thead><tbody>${tasks.map(t=>{const h=hp(t),diff=(+t.actual_hours-+t.est_hours).toFixed(1);return`<tr><td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.completion_pct}%</td><td><span class="bdg ${h.cls}">${h.label}</span></td><td style="font-size:11px">${t.est_hours}h</td><td style="font-size:11px;color:${parseFloat(diff)>0?'var(--cd)':'var(--td)'}">${t.actual_hours}h</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>'}</tbody></table>`);
 }

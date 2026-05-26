@@ -13,6 +13,12 @@ const VACANCY_TAB_GID  = '1251169333'; // 職缺表 tab
 
 // ── 允許 CORS，讓前端 Dashboard 可以呼叫 ──
 function doGet(e) {
+  // 若是直接從編輯器點「執行」誤觸，e 會是 undefined，直接回友善提示
+  if (!e || !e.parameter) {
+    return ContentService
+      .createTextOutput('Recruit Dashboard API is alive. 請從前端 Dashboard 呼叫，不是直接開啟此 URL。')
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
   const action = e.parameter.action;
   let result;
   try {
@@ -30,6 +36,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  if (!e || !e.postData) return jsonResponse({ error: '請從前端 Dashboard 發 POST 請求，不要在編輯器直接執行' });
   let body;
   try {
     body = JSON.parse(e.postData.contents);
@@ -327,4 +334,415 @@ function upsertRow(sheetId, tabName, idField, data) {
   // 新增列
   sheet.appendRow(newRow);
   return { success: true, action: 'inserted' };
+}
+
+// ============================================================
+//  SETUP — 一次性自動補齊 Tasks sheet 必要欄位
+//  使用方式：到 Apps Script 編輯器，函式下拉選 setupTasksSchema → ▶ 執行
+//  作用：
+//    - 確保 Tasks 表有 task_type, team_kr_ref, member_kr_ref, start_date, end_date
+//    - 對既有資料的 task_type 預設填「專案任務」（你可手動改為「常態工作」）
+//    - 已存在的欄位不會重複加，可重複執行
+// ============================================================
+
+function setupTasksSchema() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Tasks');
+  if (!sheet) { Logger.log('❌ 找不到 Tasks sheet，請先建立此分頁'); return; }
+
+  const lastCol = Math.max(1, sheet.getLastColumn());
+  const header  = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  const NEED    = ['task_type', 'team_kr_ref', 'member_kr_ref', 'start_date', 'end_date'];
+  const missing = NEED.filter(c => header.indexOf(c) < 0);
+
+  if (!missing.length) { Logger.log('✓ Tasks 已具備所有必要欄位'); return; }
+
+  Logger.log('開始補齊 Tasks 欄位...');
+  Logger.log('─────────────────────────────────────────────');
+
+  // 1. 在最右邊加上缺少的欄位
+  sheet.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+  Logger.log('✓ 新增 ' + missing.length + ' 個欄位：' + missing.join(', '));
+
+  // 2. 既有資料的 task_type 預設「專案任務」
+  if (missing.indexOf('task_type') >= 0) {
+    const lastRow    = sheet.getLastRow();
+    if (lastRow > 1) {
+      const typeColNum = lastCol + missing.indexOf('task_type') + 1;
+      const range      = sheet.getRange(2, typeColNum, lastRow - 1, 1);
+      const values     = range.getValues();
+      const newValues  = values.map(r => [r[0] || '專案任務']);
+      range.setValues(newValues);
+      Logger.log('  ↳ 既有 ' + (lastRow - 1) + ' 筆任務的 task_type 預設填「專案任務」');
+    }
+  }
+
+  Logger.log('─────────────────────────────────────────────');
+  Logger.log('✓ 完成。下一步可執行：');
+  Logger.log('   migrateKrRefDryRun → 預覽舊 kr_ref 拆成 team/member_kr_ref');
+}
+
+// ============================================================
+//  MIGRATION — 一次性將舊 kr_ref 拆成 team_kr_ref + member_kr_ref
+//  使用方式：
+//    1. 在 Apps Script 編輯器上方函式下拉選 migrateKrRefDryRun → ▶ 執行
+//       （乾跑模式，只看 log 不寫入；確認結果無誤再執行下一步）
+//    2. 選 migrateKrRef → ▶ 執行（實際寫入）
+//
+//  邏輯：
+//    - 對每筆「專案任務」且 kr_ref 有值的列，將 kr_ref 同步寫到
+//      team_kr_ref 和 member_kr_ref，格式為 "<TARGET_QUARTER> | <原值>"
+//    - TARGET_QUARTER 預設為當前年份；若你的 OKR 用 Q1/Q2/Q3/Q4 命名，
+//      請手動修改 TARGET_QUARTER 變數
+//    - 略過：常態工作、kr_ref 為空、或已有 team/member_kr_ref 的列
+//    - kr_ref 欄位本身不會被刪除（保留作為備份）
+//    - 可重複執行（idempotent）：已遷移過的列會被略過
+// ============================================================
+
+function migrateKrRef()       { _migrateKrRef(false); }
+function migrateKrRefDryRun() { _migrateKrRef(true);  }
+
+function _migrateKrRef(dryRun) {
+  // ── 可調整：遷移後加在 KR 前面的 quarter 標籤 ──
+  const TARGET_QUARTER = new Date().getFullYear().toString(); // 例如 '2025'
+  // 若你的 OKR 用 Q1/Q2/Q3/Q4，請改成：const TARGET_QUARTER = 'Q3';
+
+  const ss    = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Tasks');
+  if (!sheet) { Logger.log('❌ 找不到 Tasks sheet'); return; }
+
+  // Step 1：實際模式時，先補上不存在的欄位
+  if (!dryRun) {
+    const initHeader = sheet.getRange(1, 1, 1, Math.max(1, sheet.getLastColumn())).getValues()[0];
+    const needCols   = ['team_kr_ref', 'member_kr_ref'].filter(c => initHeader.indexOf(c) < 0);
+    if (needCols.length) {
+      sheet.getRange(1, initHeader.length + 1, 1, needCols.length).setValues([needCols]);
+      Logger.log('✓ 新增欄位：' + needCols.join(', '));
+    }
+  }
+
+  // Step 2：重新讀取資料（含剛新增的欄位）
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) { Logger.log('⚠ Tasks sheet 沒有資料'); return; }
+
+  const header        = data[0];
+  const idxKr         = header.indexOf('kr_ref');
+  const idxTeam       = header.indexOf('team_kr_ref');
+  const idxMember     = header.indexOf('member_kr_ref');
+  const idxType       = header.indexOf('task_type');
+  const idxMemberName = header.indexOf('member');
+  const idxTaskId     = header.indexOf('task_id');
+
+  if (idxKr < 0)        { Logger.log('⚠ 找不到 kr_ref 欄位，無資料可遷移'); return; }
+  if (idxTeam < 0 || idxMember < 0) {
+    Logger.log('⚠ 目標欄位不存在（請先用 migrateKrRef 而非 DryRun，或手動加上 team_kr_ref / member_kr_ref 欄位）');
+    return;
+  }
+
+  Logger.log((dryRun ? '【乾跑模式 — 不會寫入】' : '【實際執行】') + ' 開始掃描 Tasks sheet');
+  Logger.log('共 ' + (data.length - 1) + ' 筆任務、quarter prefix = "' + TARGET_QUARTER + '"');
+  Logger.log('─────────────────────────────────────────────');
+
+  let migrated = 0, skipped = 0, already = 0;
+  const updates = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row        = data[i];
+    const taskId     = (row[idxTaskId]     || '(no id)').toString();
+    const memberName = (row[idxMemberName] || '?'      ).toString();
+    const oldKr      = (row[idxKr]         || ''       ).toString().trim();
+    const taskType   = (row[idxType]       || ''       ).toString().trim();
+    const curTeam    = (row[idxTeam]       || ''       ).toString().trim();
+    const curMember  = (row[idxMember]     || ''       ).toString().trim();
+
+    if (taskType === '常態工作') {
+      Logger.log(taskId + ' (' + memberName + ')  ── 略過（常態工作）');
+      skipped++; continue;
+    }
+    if (!oldKr) {
+      Logger.log(taskId + ' (' + memberName + ')  ── 略過（kr_ref 為空）');
+      skipped++; continue;
+    }
+    if (curTeam || curMember) {
+      Logger.log(taskId + ' (' + memberName + ')  ── 略過（已遷移過，保留現值）');
+      already++; continue;
+    }
+
+    const newVal = TARGET_QUARTER + ' | ' + oldKr;
+    Logger.log(taskId + ' (' + memberName + ')  ' + oldKr + ' → ' + newVal + '  ✓');
+    updates.push({ rowNum: i + 1, val: newVal });
+    migrated++;
+  }
+
+  if (!dryRun && updates.length) {
+    // 逐列寫入（對 < 200 筆任務性能足夠；超過建議改用 batch setValues）
+    updates.forEach(u => {
+      sheet.getRange(u.rowNum, idxTeam   + 1).setValue(u.val);
+      sheet.getRange(u.rowNum, idxMember + 1).setValue(u.val);
+    });
+  }
+
+  Logger.log('─────────────────────────────────────────────');
+  Logger.log(
+    (dryRun ? '✓ 乾跑完成（未寫入）' : '✓ 實際執行完成')
+    + '：遷移 ' + migrated + ' 筆 / 略過 ' + skipped + ' 筆 / 已遷移 ' + already + ' 筆'
+  );
+  if (dryRun && migrated > 0) {
+    Logger.log('→ 確認無誤後，請執行 migrateKrRef（不含 DryRun）寫入實際資料');
+  }
+}
+
+// ============================================================
+//  REVERT — 萬一 migrateKrRef 結果不滿意，用這個一鍵還原
+//  使用方式：
+//    1. 先執行 revertKrMigrationDryRun → ▶ 看 log 確認要清的列
+//    2. 再執行 revertKrMigration → ▶ 實際清除
+//
+//  邏輯：
+//    - 只清「值符合遷移腳本格式」的列（"<TARGET_QUARTER> | <kr_ref>"）
+//    - 使用者「手動填」的 team_kr_ref / member_kr_ref 會被保留
+//    - team_kr_ref 和 member_kr_ref 兩欄獨立判斷（只清符合的那邊）
+//    - kr_ref 欄位的備份值不會被動到
+//    - team_kr_ref / member_kr_ref 欄位本身不會被刪（避免下次遷移又要重建）
+// ============================================================
+
+function revertKrMigration()       { _revertKrMigration(false); }
+function revertKrMigrationDryRun() { _revertKrMigration(true);  }
+
+function _revertKrMigration(dryRun) {
+  const TARGET_QUARTER = new Date().getFullYear().toString();
+  // 若你上次遷移時改過 TARGET_QUARTER（例如 'Q3'），這裡也要對應改成同一個值
+
+  const ss    = SpreadsheetApp.openById(SHEET_ID);
+  const sheet = ss.getSheetByName('Tasks');
+  if (!sheet) { Logger.log('❌ 找不到 Tasks sheet'); return; }
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) { Logger.log('⚠ Tasks sheet 沒有資料'); return; }
+
+  const header        = data[0];
+  const idxKr         = header.indexOf('kr_ref');
+  const idxTeam       = header.indexOf('team_kr_ref');
+  const idxMember     = header.indexOf('member_kr_ref');
+  const idxTaskId     = header.indexOf('task_id');
+  const idxMemberName = header.indexOf('member');
+
+  if (idxTeam < 0 && idxMember < 0) {
+    Logger.log('⚠ 找不到 team_kr_ref / member_kr_ref 欄位，無資料需清除');
+    return;
+  }
+  if (idxKr < 0) {
+    Logger.log('⚠ 找不到 kr_ref 備份欄，無法判斷哪些是遷移腳本填的（請確認沒被刪掉）');
+    return;
+  }
+
+  Logger.log((dryRun ? '【乾跑模式 — 不會清除】' : '【實際執行】') + ' 開始掃描 Tasks sheet');
+  Logger.log('清除目標：值等於 "' + TARGET_QUARTER + ' | <kr_ref>" 的列');
+  Logger.log('─────────────────────────────────────────────');
+
+  let reverted = 0, kept = 0;
+  const updates = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row        = data[i];
+    const taskId     = (row[idxTaskId]     || '(no id)').toString();
+    const memberName = (row[idxMemberName] || '?'      ).toString();
+    const oldKr      = (row[idxKr]         || ''       ).toString().trim();
+    const curTeam    = idxTeam   >= 0 ? (row[idxTeam]   || '').toString().trim() : '';
+    const curMember  = idxMember >= 0 ? (row[idxMember] || '').toString().trim() : '';
+
+    if (!curTeam && !curMember) continue; // 兩邊都空，不用處理
+
+    const expected         = oldKr ? (TARGET_QUARTER + ' | ' + oldKr) : null;
+    const teamIsMigrated   = expected && curTeam   === expected;
+    const memberIsMigrated = expected && curMember === expected;
+
+    if (teamIsMigrated || memberIsMigrated) {
+      const parts = [];
+      if (teamIsMigrated)   parts.push('team_kr_ref="' + curTeam + '"');
+      if (memberIsMigrated) parts.push('member_kr_ref="' + curMember + '"');
+      Logger.log(taskId + ' (' + memberName + ')  清除：' + parts.join(' + '));
+      updates.push({ rowNum: i + 1, clearTeam: teamIsMigrated, clearMember: memberIsMigrated });
+      reverted++;
+    } else {
+      Logger.log(
+        taskId + ' (' + memberName + ')  保留（不符遷移格式，可能是手動填的）：'
+        + 'team="' + curTeam + '", member="' + curMember + '"'
+      );
+      kept++;
+    }
+  }
+
+  if (!dryRun && updates.length) {
+    updates.forEach(u => {
+      if (u.clearTeam   && idxTeam   >= 0) sheet.getRange(u.rowNum, idxTeam   + 1).setValue('');
+      if (u.clearMember && idxMember >= 0) sheet.getRange(u.rowNum, idxMember + 1).setValue('');
+    });
+  }
+
+  Logger.log('─────────────────────────────────────────────');
+  Logger.log(
+    (dryRun ? '✓ 乾跑完成（未清除）' : '✓ 實際清除完成')
+    + '：清除 ' + reverted + ' 筆 / 保留 ' + kept + ' 筆（手動填的）'
+  );
+  if (dryRun && reverted > 0) {
+    Logger.log('→ 確認無誤後，請執行 revertKrMigration（不含 DryRun）實際清除');
+  }
+}
+
+// ============================================================
+//  UPGRADE — 將舊版 team_kr_ref / member_kr_ref 從 KR 層升級到「子任務指標」層
+//  舊格式：「quarter | KR_label」                     例：「2025 | KR1」
+//  新格式：「quarter | objective | KR_label | 任務指標」 例：「2025 | 拓展被動求才管道 | KR1 | LinkedIn Sourcing」
+//
+//  使用方式：
+//    1. 先執行 upgradeKrRefFormatDryRun → ▶ 看 log 確認升級結果
+//    2. 確認無誤再執行 upgradeKrRefFormat → ▶ 寫入
+//
+//  邏輯：
+//    - 對每筆有舊格式的任務，依「quarter + KR_label」查 OKR/MBP sheet
+//    - 用該 KR 的「第一個任務指標」當作預設升級對象
+//    - 升級後請使用者到 Dashboard 任務工時頁微調（如需指定其他子任務指標）
+// ============================================================
+
+function upgradeKrRefFormat()       { _upgradeKrRefFormat(false); }
+function upgradeKrRefFormatDryRun() { _upgradeKrRefFormat(true);  }
+
+function _upgradeKrRefFormat(dryRun) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // 1. 建立 KR → 第一個任務指標的對照
+  const teamMap = _buildKRFirstTaskMap(ss, 'OKR', false);
+  const mbpMap  = _buildKRFirstTaskMap(ss, 'MBP', true);
+
+  Logger.log('Team OKR 對照建立完成，共 ' + Object.keys(teamMap).length + ' 個 KR');
+  Logger.log('MBP 對照建立完成，共 ' + Object.keys(mbpMap).length + ' 個個人 KR');
+
+  // 2. 讀取 Tasks
+  const sheet = ss.getSheetByName('Tasks');
+  if (!sheet) { Logger.log('❌ 找不到 Tasks sheet'); return; }
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) { Logger.log('⚠ Tasks sheet 沒有資料'); return; }
+
+  const header        = data[0];
+  const idxTeam       = header.indexOf('team_kr_ref');
+  const idxMember     = header.indexOf('member_kr_ref');
+  const idxMemberName = header.indexOf('member');
+  const idxTaskId     = header.indexOf('task_id');
+
+  if (idxTeam < 0 && idxMember < 0) {
+    Logger.log('⚠ 找不到 team_kr_ref / member_kr_ref 欄位，無資料需升級');
+    return;
+  }
+
+  Logger.log((dryRun ? '【乾跑模式 — 不會寫入】' : '【實際執行】') + ' 開始掃描 Tasks sheet');
+  Logger.log('─────────────────────────────────────────────');
+
+  let upgraded = 0, skipped = 0, miss = 0;
+  const updates = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row        = data[i];
+    const taskId     = (row[idxTaskId]     || '(no id)').toString();
+    const memberName = (row[idxMemberName] || ''       ).toString().trim();
+    const curTeam    = idxTeam   >= 0 ? (row[idxTeam]   || '').toString().trim() : '';
+    const curMember  = idxMember >= 0 ? (row[idxMember] || '').toString().trim() : '';
+
+    const newTeam   = _upgradeOneRef(curTeam,   teamMap, null);
+    const newMember = _upgradeOneRef(curMember, mbpMap,  memberName);
+
+    const teamChanged   = newTeam   !== curTeam;
+    const memberChanged = newMember !== curMember;
+
+    if (!teamChanged && !memberChanged) {
+      const teamFmt   = _refStatus(curTeam);
+      const memberFmt = _refStatus(curMember);
+      if (teamFmt === 'new' || memberFmt === 'new' || (!curTeam && !curMember)) {
+        skipped++;
+        continue;
+      }
+      // 舊格式但找不到對照
+      Logger.log(taskId + '  ⚠ 舊格式但找不到對照（請手動處理）：team="' + curTeam + '" member="' + curMember + '"');
+      miss++;
+      continue;
+    }
+
+    const log = [];
+    if (teamChanged)   log.push('team:「' + curTeam + '」→「' + newTeam + '」');
+    if (memberChanged) log.push('member:「' + curMember + '」→「' + newMember + '」');
+    Logger.log(taskId + '  ✓ ' + log.join(' / '));
+    updates.push({ rowNum: i + 1, newTeam: teamChanged ? newTeam : null, newMember: memberChanged ? newMember : null });
+    upgraded++;
+  }
+
+  if (!dryRun && updates.length) {
+    updates.forEach(u => {
+      if (u.newTeam   !== null && idxTeam   >= 0) sheet.getRange(u.rowNum, idxTeam   + 1).setValue(u.newTeam);
+      if (u.newMember !== null && idxMember >= 0) sheet.getRange(u.rowNum, idxMember + 1).setValue(u.newMember);
+    });
+  }
+
+  Logger.log('─────────────────────────────────────────────');
+  Logger.log(
+    (dryRun ? '✓ 乾跑完成（未寫入）' : '✓ 實際升級完成')
+    + '：升級 ' + upgraded + ' 筆 / 略過 ' + skipped + ' 筆（已是新格式或空）/ 找不到對照 ' + miss + ' 筆'
+  );
+  if (dryRun && upgraded > 0) {
+    Logger.log('→ 確認無誤後，請執行 upgradeKrRefFormat（不含 DryRun）寫入');
+  }
+}
+
+// 內部工具：建立 KR → 第一個任務指標 的對照表
+// 回傳 key 格式：
+//   OKR: 「quarter|KR_label」
+//   MBP: 「quarter|member|KR_label」
+function _buildKRFirstTaskMap(ss, sheetName, withMember) {
+  const map = {};
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return map;
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return map;
+
+  const header = data[0];
+  const qIdx  = header.indexOf('quarter');
+  const oIdx  = header.indexOf('objective');
+  const klIdx = header.indexOf('kr_label');
+  const tnIdx = header.indexOf('task_name');
+  const mIdx  = withMember ? header.indexOf('member') : -1;
+
+  if (qIdx < 0 || klIdx < 0 || tnIdx < 0) return map;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const q  = (row[qIdx]  || '').toString().trim();
+    const o  = (row[oIdx]  || '').toString().trim();
+    const kl = (row[klIdx] || '').toString().trim();
+    const tn = (row[tnIdx] || '').toString().trim();
+    const m  = mIdx >= 0 ? (row[mIdx] || '').toString().trim() : '';
+
+    if (!q || !kl || !tn) continue;
+
+    const key = withMember ? (q + '|' + m + '|' + kl) : (q + '|' + kl);
+    if (!map[key]) map[key] = { q: q, o: o, kl: kl, tn: tn };
+  }
+  return map;
+}
+
+// 內部工具：升級單一 ref 字串
+function _upgradeOneRef(ref, map, memberName) {
+  if (!ref) return ref;
+  const parts = ref.split('|').map(function(p){ return p.trim(); });
+  if (parts.length >= 4) return ref;     // 已是新格式
+  if (parts.length !== 2) return ref;    // 不認識的格式
+  const q = parts[0], kl = parts[1];
+  const key = memberName ? (q + '|' + memberName + '|' + kl) : (q + '|' + kl);
+  const entry = map[key];
+  if (!entry) return ref;
+  return q + ' | ' + entry.o + ' | ' + kl + ' | ' + entry.tn;
+}
+
+function _refStatus(ref) {
+  if (!ref) return 'empty';
+  const parts = ref.split('|');
+  return parts.length >= 4 ? 'new' : 'old';
 }
