@@ -114,7 +114,7 @@ function getSettings() {
 
 // ============================================================
 //  外部缺額表串接（唯讀）
-//  篩選條件：窗口 = "Rita"  且  Status = "錄取" 或 "關缺"
+//  篩選條件：窗口 = "Rita"  且  Status = "錄取" 或 "補缺"
 //  欄位對應（缺額表 → Dashboard）：
 //    職能      = 職能  (col B)
 //    職等      = 職等  (col H，原「職等」)
@@ -159,7 +159,7 @@ function getExternalVacancies() {
     };
 
     const TARGET_OWNER  = 'Rita';
-    const TARGET_STATUS = ['錄取', '關缺', '補放'];
+    const TARGET_STATUS = ['錄取', '補缺'];
 
     const results = [];
     for (let i = 1; i < data.length; i++) {
