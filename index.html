@@ -447,8 +447,30 @@ window.addEventListener('load',async()=>{
   try{renderAll();}catch(e){console.error('renderAll error:',e);}
 });
 
+window.lastApiError=null;
 async function apiGet(p={}){if(!isLive())return null;try{const url=new URL(cfg.apiUrl);Object.entries(p).forEach(([k,v])=>url.searchParams.set(k,v));const j=await(await fetch(url.toString())).json();console.log('[apiGet]',p,'→',j);return j;}catch(e){console.error('[apiGet] fetch/parse error',p,e);return null;}}
-async function apiPost(b){if(!isLive())return null;try{const resp=await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({token:cfg.token,...b})});const j=await resp.json();console.log('[apiPost]',b.action,'→',j);return j;}catch(e){console.error('[apiPost] fetch/parse error',b.action,e);return null;}}
+async function apiPost(b){
+  if(!isLive())return null;
+  window.lastApiError=null;
+  let resp,txt;
+  try{
+    resp=await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({token:cfg.token,...b})});
+  }catch(e){
+    window.lastApiError='fetch 拋例外：'+(e.message||e);
+    console.error('[apiPost] fetch threw:',e);return null;
+  }
+  try{txt=await resp.text();}catch(e){
+    window.lastApiError='讀取回應失敗：'+(e.message||e);
+    console.error('[apiPost] read body failed:',e);return null;
+  }
+  try{
+    const j=JSON.parse(txt);
+    console.log('[apiPost]',b.action,'→',j);return j;
+  }catch(e){
+    window.lastApiError=`回應非 JSON｜HTTP ${resp.status}｜URL: ${resp.url}｜Body 前 300 字: ${txt.slice(0,300)}`;
+    console.error('[apiPost] not JSON. Status:',resp.status,'URL:',resp.url,'Body:',txt.slice(0,500));return null;
+  }
+}
 async function loadData(){
   if(!isLive()){
     S.tasks=getDemoTasks();S.vacancies=getDemoVac();
@@ -1340,8 +1362,10 @@ async function saveOneVac(vi){
   const r=await apiPost({action:'upsertVac',data:v});
   console.log('[saveOneVac] result',r);
   if(r&&r.success){showToast('已儲存');return;}
-  const detail=r?(r.error||'未預期回應：'+JSON.stringify(r)):'apiPost 回 null（fetch 失敗或回應非 JSON，看 console）';
-  const msg='儲存失敗：'+detail;
+  let detail;
+  if(r)detail=r.error||'未預期回應：'+JSON.stringify(r);
+  else detail=window.lastApiError||'apiPost 回 null（原因不明）';
+  const msg='儲存失敗：\n\n'+detail+'\n\nAPI URL: '+(cfg.apiUrl||'(未設定)');
   console.error('[saveOneVac]',msg);
   alert(msg);
 }
