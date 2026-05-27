@@ -1276,15 +1276,10 @@ function openDashDetail(type){
   openMdl(title,`<table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>預估h</th><th>實際h</th><th>備註</th></tr></thead><tbody>${tasks.map(t=>{const h=hp(t),diff=(+t.actual_hours-+t.est_hours).toFixed(1);return`<tr><td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.completion_pct}%</td><td><span class="bdg ${h.cls}">${h.label}</span></td><td style="font-size:11px">${t.est_hours}h</td><td style="font-size:11px;color:${parseFloat(diff)>0?'var(--cd)':'var(--td)'}">${t.actual_hours}h</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>'}</tbody></table>`);
 }
 function renderVacancy(){
-  const sets={cm:new Set(),func:new Set()};
-  S.vacancies.forEach(v=>{if(v.cm)sets.cm.add(v.cm);if(v.func)sets.func.add(v.func);});
-  [{id:'vf-cm',key:'cm'},{id:'vf-func',key:'func'}].forEach(({id,key})=>{
-    const el=document.getElementById(id);if(!el)return;const cur=el.value;
-    el.innerHTML='<option value="">全部</option>'+[...sets[key]].sort().map(v=>`<option value="${v}">${v}</option>`).join('');
-    if(cur)el.value=cur;
-  });
+  populateVacFilters();
   const cm=document.getElementById('vf-cm')?.value||'';
   const fn=document.getElementById('vf-func')?.value||'';
+  const src=document.getElementById('vf-src')?.value||'';
   const csS=document.getElementById('vf-close-s')?.value||'';
   const csE=document.getElementById('vf-close-e')?.value||'';
   const obS=document.getElementById('vf-onboard-s')?.value||'';
@@ -1292,14 +1287,34 @@ function renderVacancy(){
   const filtered=S.vacancies.filter(v=>{
     if(cm&&v.cm!==cm)return false;
     if(fn&&v.func!==fn)return false;
+    if(src&&v.src!==src)return false;
     if(csS&&v.close_day&&v.close_day<csS)return false;
     if(csE&&v.close_day&&v.close_day>csE)return false;
     if(obS&&v.onboard_day&&v.onboard_day<obS)return false;
     if(obE&&v.onboard_day&&v.onboard_day>obE)return false;
     return true;
+  }).sort((a,b)=>{
+    // 依 close_day 由近到遠排序（最新在上）；無 close_day 者排最後
+    const ad=a.close_day||'',bd=b.close_day||'';
+    if(!ad&&!bd)return 0;
+    if(!ad)return 1;
+    if(!bd)return -1;
+    return bd.localeCompare(ad);
   });
   const cnt=document.getElementById('vac-filter-count');
-  if(cnt)cnt.textContent=filtered.length<S.vacancies.length?`顯示 ${filtered.length}/${S.vacancies.length} 筆`:'';
+  if(cnt){
+    const active=[];
+    if(cm)active.push('獵才='+cm);
+    if(fn)active.push('職能='+fn);
+    if(src)active.push('來源='+src);
+    if(csS||csE)active.push(`Close ${csS||'—'}~${csE||'—'}`);
+    if(obS||obE)active.push(`報到 ${obS||'—'}~${obE||'—'}`);
+    if(active.length){
+      cnt.innerHTML=`<span class="bdg bp" style="font-size:11px">✓ 篩選中：顯示 ${filtered.length} / ${S.vacancies.length} 筆</span> <span style="font-size:10px;color:var(--muted)">（${active.join('、')}）</span>`;
+    }else{
+      cnt.innerHTML=`<span style="font-size:11px;color:var(--muted)">共 ${S.vacancies.length} 筆</span>`;
+    }
+  }
   const tbody=document.getElementById('vac-body');if(!tbody)return;
   tbody.innerHTML=filtered.map(v=>{
     const ri=S.vacancies.indexOf(v);
@@ -1317,8 +1332,19 @@ function renderVacancy(){
     </tr>`;
   }).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">尚無資料</td></tr>';
 }
-function clearVacF(){['vf-cm','vf-func','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderVacancy();}
-async function saveOneVac(vi){if(S.demo){showToast('Demo 模式');return;}const r=await apiPost({action:'upsertVac',data:S.vacancies[vi]});showToast(r?.success?'已儲存':'儲存失敗');}
+function clearVacF(){['vf-cm','vf-func','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderVacancy();}
+async function saveOneVac(vi){
+  if(S.demo){showToast('Demo 模式');return;}
+  const v=S.vacancies[vi];
+  console.log('[saveOneVac] sending',v);
+  const r=await apiPost({action:'upsertVac',data:v});
+  console.log('[saveOneVac] result',r);
+  if(r&&r.success){showToast('已儲存');return;}
+  const detail=r?(r.error||'未預期回應：'+JSON.stringify(r)):'apiPost 回 null（fetch 失敗或回應非 JSON，看 console）';
+  const msg='儲存失敗：'+detail;
+  console.error('[saveOneVac]',msg);
+  alert(msg);
+}
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="Engineering"></div>
