@@ -1089,17 +1089,17 @@ function renderVacancy(){
   document.getElementById('vac-body').innerHTML=filtered.map((v,vi)=>{
     const realIdx=S.vacancies.indexOf(v);
     return `<tr>
-    <td style="font-weight:500;font-size:12px">${esc(v.name)}</td>
-    <td style="font-size:12px">${esc(v.func)}</td>
-    <td><span class="bdg ba">${esc(v.level)}</span></td>
+    <td style="font-size:12px">${esc(v.func||'—')}</td>
+    <td><span class="bdg ba">${esc(v.level||'—')}</span></td>
     <td style="font-size:11px;color:var(--muted)">${esc(v.biz||'—')}</td>
-    <td><span class="bdg bg2">${esc(v.src)}</span></td>
-    <td>
-      <input class="ic" value="${esc(v.cm||'')}" onchange="S.vacancies[${realIdx}].cm=this.value;pendingVac=${realIdx}" style="width:60px;font-size:11px" placeholder="CM 獵才">
-    </td>
-    <td><span class="bdg ${VST[v.status]||'bg2'}">${esc(v.status)}</span></td>
-    <td><button onclick="saveVac(${realIdx})" title="儲存此列" style="background:none;border:.5px solid var(--bdr);border-radius:6px;padding:4px 7px;cursor:pointer;color:var(--p);font-size:14px;line-height:1" aria-label="儲存"><i class="ti ti-device-floppy" aria-hidden="true"></i></button></td>
-  </tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">尚無符合條件的資料</td></tr>';
+    <td style="font-size:11px;color:var(--muted)">${esc(v.close_day||'—')}</td>
+    <td style="font-size:11px;color:var(--muted)">${esc(v.onboard_day||'—')}</td>
+    <td style="font-size:12px">${esc(v.reporter||'—')}</td>
+    <td><span class="bdg bg2">${esc(v.src||'—')}</span></td>
+    <td><input class="ic" value="${esc(v.cm||'')}" onchange="S.vacancies[${realIdx}].cm=this.value" style="width:60px;font-size:11px" placeholder="CM"></td>
+    <td><span class="bdg ${VST[v.status]||'bg2'}">${esc(v.status||'—')}</span></td>
+    <td><button onclick="saveVac(${realIdx})" title="儲存此列" class="btn bts" style="padding:3px 8px;font-size:11px;color:var(--p)">↑</button></td>
+  </tr>`;}).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">尚無符合條件的資料</td></tr>';
 }
 async function saveVac(vi){if(S.demo){showToast('Demo 模式');return;}const r=await apiPost({action:'upsertVac',data:S.vacancies[vi]});showToast(r?.success?'已儲存':'儲存失敗');}
 function openAddVac(){openMdl('新增關缺',`
