@@ -173,23 +173,32 @@ function getExternalVacancies() {
       if (!TARGET_STATUS.includes(status)) continue;
 
       const jobNo = (row[C.job_no] || '').toString().trim();
-      const ov    = jobNo ? (overrides[jobNo] || {}) : {};
+      const rowData = {
+        job_no:      jobNo,
+        title:       row[C.title]    || '',
+        reporter:    row[C.reporter] || '',
+        close_day:   formatDate(row[C.close_day]),
+        onboard_day: formatDate(row[C.onboard]),
+      };
+      const key = _vacOverrideKey(rowData);
+      const ov  = overrides[key] || {};
 
       results.push({
         vac_id:     'EXT-' + (i + 1),
         func:       row[C.func]      || '',
         level:      row[C.level]     || '',
         biz:        row[C.biz]       || row[C.biz_grp] || '',
-        close_day:  formatDate(row[C.close_day]),
-        onboard_day: formatDate(row[C.onboard]),
-        reporter:   row[C.reporter]  || '',
+        close_day:  rowData.close_day,
+        onboard_day: rowData.onboard_day,
+        reporter:   rowData.reporter,
         src:        ov.src    || '',  // 來自 VacOverrides（使用者編輯）
         cm:         ov.cm     || '',  // 來自 VacOverrides（使用者編輯）
         status:     ov.status || '',  // 來自 VacOverrides（使用者編輯）
-        // 附加資訊（備查）
-        title:      row[C.title]     || '',
+        // 附加資訊（備查 + 給 upsertVac 算 key 用）
+        title:      rowData.title,
         open_date:  formatDate(row[C.open_date]),
         job_no:     jobNo,
+        _override_key: key,
         _source:    'external',
       });
     }
@@ -201,8 +210,22 @@ function getExternalVacancies() {
   }
 }
 
+// 缺額表覆寫的查找鍵：優先用 job_no；空白則用「中文職稱|報到人員|close_day|onboard_day」組合
+// 這樣即便來源缺額表的「職缺編號」欄是空的，仍可用穩定的組合鍵儲存使用者編輯
+function _vacOverrideKey(d) {
+  const jn = (d.job_no || '').toString().trim();
+  if (jn) return jn;
+  return '_synth_' + [
+    (d.title       || '').toString().trim(),
+    (d.reporter    || '').toString().trim(),
+    (d.close_day   || '').toString().trim(),
+    (d.onboard_day || '').toString().trim(),
+  ].join('|');
+}
+
 // 從 dashboard 自己的 DB Sheet 讀外部缺額表的覆寫欄位
-// 回傳格式：{ [job_no]: { cm, src, status } }
+// 回傳格式：{ [override_key]: { cm, src, status } }
+// 覆寫表的第一欄（仍叫 job_no）儲存的是 _vacOverrideKey 的結果
 function _readVacOverrides() {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -250,18 +273,20 @@ function upsertTask(data) {
 }
 
 function upsertVac(data) {
-  // 外部缺額表本身唯讀（屬於團隊共用 Sheet），但使用者在 dashboard 編輯的
-  // cm/src/status 寫到本專案 DB 的 VacOverrides，以 job_no 對應
+  // 外部缺額表本身唯讀（屬於團隊共用 Sheet），使用者在 dashboard 編輯的
+  // cm/src/status 寫到本專案 DB 的 VacOverrides。
+  // Key 規則：優先用 job_no；若缺則用 _vacOverrideKey 組合鍵
   if (data._source === 'external') {
-    if (!data.job_no) {
-      return { success: false, error: '此職缺缺 job_no，無法儲存（請確認來源缺額表的「職缺編號」欄位有值）' };
+    const key = data._override_key || _vacOverrideKey(data);
+    if (!key || key === '_synth_|||') {
+      return { success: false, error: '此職缺缺少可用識別欄位（job_no/中文職稱/報到人員/日期全空），無法儲存' };
     }
-    return _upsertVacOverride(data);
+    return _upsertVacOverride(data, key);
   }
   return upsertRow(SHEET_ID, 'Vacancies', 'vac_id', data);
 }
 
-function _upsertVacOverride(data) {
+function _upsertVacOverride(data, key) {
   const HEADER = ['job_no', 'cm', 'src', 'status', 'updated_at'];
   const ss = SpreadsheetApp.openById(SHEET_ID);
   let sheet = ss.getSheetByName('VacOverrides');
@@ -283,7 +308,7 @@ function _upsertVacOverride(data) {
   const now     = new Date().toISOString();
 
   const newRow = header.map(h => {
-    if (h === 'job_no')     return data.job_no || '';
+    if (h === 'job_no')     return key;  // 存放 override key（可能是 job_no 或 _synth_...）
     if (h === 'cm')         return data.cm     || '';
     if (h === 'src')        return data.src    || '';
     if (h === 'status')     return data.status || '';
@@ -291,16 +316,16 @@ function _upsertVacOverride(data) {
     return '';
   });
 
-  // 找現有列（key = job_no）
+  // 找現有列（key 對應 job_no 欄）
   for (let i = 1; i < allData.length; i++) {
-    if (String(allData[i][jIdx]).trim() === String(data.job_no).trim()) {
+    if (String(allData[i][jIdx]).trim() === String(key).trim()) {
       sheet.getRange(i + 1, 1, 1, header.length).setValues([newRow]);
-      return { success: true, action: 'updated' };
+      return { success: true, action: 'updated', key: key };
     }
   }
   // 新增列
   sheet.appendRow(newRow);
-  return { success: true, action: 'inserted' };
+  return { success: true, action: 'inserted', key: key };
 }
 
 function upsertPipeline(data) {
