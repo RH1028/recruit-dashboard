@@ -129,6 +129,8 @@ function getSettings() {
 
 function getExternalVacancies() {
   try {
+    const overrides = _readVacOverrides();  // 從 dashboard DB 讀 cm/src/status
+
     const ss  = SpreadsheetApp.openById(VACANCY_SHEET_ID);
     // 取得職缺表 tab（以 gid 或名稱）
     const sheets = ss.getSheets();
@@ -170,6 +172,9 @@ function getExternalVacancies() {
       if (owner !== TARGET_OWNER) continue;
       if (!TARGET_STATUS.includes(status)) continue;
 
+      const jobNo = (row[C.job_no] || '').toString().trim();
+      const ov    = jobNo ? (overrides[jobNo] || {}) : {};
+
       results.push({
         vac_id:     'EXT-' + (i + 1),
         func:       row[C.func]      || '',
@@ -178,13 +183,13 @@ function getExternalVacancies() {
         close_day:  formatDate(row[C.close_day]),
         onboard_day: formatDate(row[C.onboard]),
         reporter:   row[C.reporter]  || '',
-        src:        '',   // 手動填寫
-        cm:         '',   // 手動填寫
-        status:     '',   // 手動填寫
+        src:        ov.src    || '',  // 來自 VacOverrides（使用者編輯）
+        cm:         ov.cm     || '',  // 來自 VacOverrides（使用者編輯）
+        status:     ov.status || '',  // 來自 VacOverrides（使用者編輯）
         // 附加資訊（備查）
         title:      row[C.title]     || '',
         open_date:  formatDate(row[C.open_date]),
-        job_no:     row[C.job_no]    || '',
+        job_no:     jobNo,
         _source:    'external',
       });
     }
@@ -193,6 +198,38 @@ function getExternalVacancies() {
     // 若外部 Sheet 讀不到，回傳空陣列不中斷
     Logger.log('getExternalVacancies error: ' + err.message);
     return [];
+  }
+}
+
+// 從 dashboard 自己的 DB Sheet 讀外部缺額表的覆寫欄位
+// 回傳格式：{ [job_no]: { cm, src, status } }
+function _readVacOverrides() {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID);
+    const sheet = ss.getSheetByName('VacOverrides');
+    if (!sheet) return {};
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return {};
+    const header = data[0];
+    const jIdx  = header.indexOf('job_no');
+    const cIdx  = header.indexOf('cm');
+    const sIdx  = header.indexOf('src');
+    const stIdx = header.indexOf('status');
+    if (jIdx < 0) return {};
+    const map = {};
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][jIdx] || '').trim();
+      if (!key) continue;
+      map[key] = {
+        cm:     cIdx  >= 0 ? String(data[i][cIdx]  || '') : '',
+        src:    sIdx  >= 0 ? String(data[i][sIdx]  || '') : '',
+        status: stIdx >= 0 ? String(data[i][stIdx] || '') : '',
+      };
+    }
+    return map;
+  } catch (err) {
+    Logger.log('_readVacOverrides error: ' + err.message);
+    return {};
   }
 }
 
@@ -213,9 +250,57 @@ function upsertTask(data) {
 }
 
 function upsertVac(data) {
-  // 外部資料（_source === 'external'）不寫回
-  if (data._source === 'external') return { success: true, skipped: true };
+  // 外部缺額表本身唯讀（屬於團隊共用 Sheet），但使用者在 dashboard 編輯的
+  // cm/src/status 寫到本專案 DB 的 VacOverrides，以 job_no 對應
+  if (data._source === 'external') {
+    if (!data.job_no) {
+      return { success: false, error: '此職缺缺 job_no，無法儲存（請確認來源缺額表的「職缺編號」欄位有值）' };
+    }
+    return _upsertVacOverride(data);
+  }
   return upsertRow(SHEET_ID, 'Vacancies', 'vac_id', data);
+}
+
+function _upsertVacOverride(data) {
+  const HEADER = ['job_no', 'cm', 'src', 'status', 'updated_at'];
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('VacOverrides');
+  if (!sheet) {
+    sheet = ss.insertSheet('VacOverrides');
+    sheet.getRange(1, 1, 1, HEADER.length).setValues([HEADER]);
+  }
+  // 確保表頭齊全（若有人手改過 sheet）
+  const lastCol   = Math.max(1, sheet.getLastColumn());
+  const curHeader = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (HEADER.some(h => curHeader.indexOf(h) < 0)) {
+    sheet.clear();
+    sheet.getRange(1, 1, 1, HEADER.length).setValues([HEADER]);
+  }
+
+  const allData = sheet.getDataRange().getValues();
+  const header  = allData[0];
+  const jIdx    = header.indexOf('job_no');
+  const now     = new Date().toISOString();
+
+  const newRow = header.map(h => {
+    if (h === 'job_no')     return data.job_no || '';
+    if (h === 'cm')         return data.cm     || '';
+    if (h === 'src')        return data.src    || '';
+    if (h === 'status')     return data.status || '';
+    if (h === 'updated_at') return now;
+    return '';
+  });
+
+  // 找現有列（key = job_no）
+  for (let i = 1; i < allData.length; i++) {
+    if (String(allData[i][jIdx]).trim() === String(data.job_no).trim()) {
+      sheet.getRange(i + 1, 1, 1, header.length).setValues([newRow]);
+      return { success: true, action: 'updated' };
+    }
+  }
+  // 新增列
+  sheet.appendRow(newRow);
+  return { success: true, action: 'inserted' };
 }
 
 function upsertPipeline(data) {

@@ -1120,7 +1120,12 @@ function renderVacancy(){
     <td><button onclick="saveVac(${realIdx})" title="儲存此列" class="btn bts" style="padding:3px 8px;font-size:11px;color:var(--p)">↑</button></td>
   </tr>`;}).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">尚無符合條件的資料</td></tr>';
 }
-async function saveVac(vi){if(S.demo){showToast('Demo 模式');return;}const r=await apiPost({action:'upsertVac',data:S.vacancies[vi]});showToast(r?.success?'已儲存':'儲存失敗');}
+async function saveVac(vi){
+  if(S.demo){showToast('Demo 模式');return;}
+  const r=await apiPost({action:'upsertVac',data:S.vacancies[vi]});
+  if(r&&r.success)showToast('已儲存');
+  else showToast('儲存失敗：'+((r&&r.error)||'連線錯誤'),true);
+}
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
     <div><div class="ml">人選姓名</div><input class="ic" id="nv-name" placeholder="王小明"></div>
