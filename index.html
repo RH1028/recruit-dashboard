@@ -447,8 +447,8 @@ window.addEventListener('load',async()=>{
   try{renderAll();}catch(e){console.error('renderAll error:',e);}
 });
 
-async function apiGet(p={}){if(!isLive())return null;try{const url=new URL(cfg.apiUrl);Object.entries(p).forEach(([k,v])=>url.searchParams.set(k,v));return(await fetch(url.toString())).json();}catch(e){return null;}}
-async function apiPost(b){if(!isLive())return null;try{return(await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({token:cfg.token,...b})})).json();}catch(e){return null;}}
+async function apiGet(p={}){if(!isLive())return null;try{const url=new URL(cfg.apiUrl);Object.entries(p).forEach(([k,v])=>url.searchParams.set(k,v));const j=await(await fetch(url.toString())).json();console.log('[apiGet]',p,'→',j);return j;}catch(e){console.error('[apiGet] fetch/parse error',p,e);return null;}}
+async function apiPost(b){if(!isLive())return null;try{const resp=await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({token:cfg.token,...b})});const j=await resp.json();console.log('[apiPost]',b.action,'→',j);return j;}catch(e){console.error('[apiPost] fetch/parse error',b.action,e);return null;}}
 async function loadData(){
   if(!isLive()){
     S.tasks=getDemoTasks();S.vacancies=getDemoVac();
@@ -1122,9 +1122,15 @@ function renderVacancy(){
 }
 async function saveVac(vi){
   if(S.demo){showToast('Demo 模式');return;}
-  const r=await apiPost({action:'upsertVac',data:S.vacancies[vi]});
-  if(r&&r.success)showToast('已儲存');
-  else showToast('儲存失敗：'+((r&&r.error)||'連線錯誤'),true);
+  const v=S.vacancies[vi];
+  console.log('[saveVac] sending',v);
+  const r=await apiPost({action:'upsertVac',data:v});
+  console.log('[saveVac] result',r);
+  if(r&&r.success){showToast('已儲存');return;}
+  const detail=r?(r.error||'未預期回應：'+JSON.stringify(r)):'apiPost 回 null（fetch 失敗或回應非 JSON，看 console）';
+  const msg='儲存失敗：'+detail;
+  console.error('[saveVac]',msg);
+  alert(msg);  // alert 一定看得到，不會被 DevTools 擋
 }
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
