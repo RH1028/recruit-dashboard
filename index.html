@@ -518,13 +518,14 @@ function getDateFilter(prefix){
   const s=document.getElementById(prefix+'-date-start'),e=document.getElementById(prefix+'-date-end');
   return{start:s?.value||null,end:e?.value||null};
 }
+// 任務是否落在篩選區間內：依任務 start_date~end_date 與篩選區間有重疊
+// 缺起訖日（含常態工作）：無法判斷 → 一律算入（讓使用者看到需要設定日期的任務）
 function taskInRange(t,filter){
   if(!filter.start&&!filter.end)return true;
-  const d=t.updated_at?t.updated_at.substring(0,10):null;
-  if(!d)return true;
-  if(filter.start&&d<filter.start)return false;
-  if(filter.end&&d>filter.end)return false;
-  return true;
+  if(!t.start_date||!t.end_date)return true;
+  const fs=filter.start||'0000-01-01';
+  const fe=filter.end||'9999-12-31';
+  return t.end_date>=fs && t.start_date<=fe;
 }
 // 工時依「任務起訖區間 vs 篩選區間」的重疊天數做線性比例分配
 // 例：任務 4/1~5/27（57 天）60h，篩選 5/20~5/27（8 天）→ 60×8/57 ≈ 8.4h
@@ -967,7 +968,8 @@ function renderDash(){
 function renderPerfChips(){document.getElementById('perf-chips').innerHTML=S.members.map((m,i)=>`<button class="mchip ${i===activePerf?'on':''}" onclick="activePerf=${i};renderPerfChips();renderPerf()">${m.name}</button>`).join('');}
 function renderPerf(){
   const m=S.members[activePerf];if(!m)return;
-  const regularTasks=S.tasks.filter(t=>t.member===m.name&&t.task_type!=='常態工作');
+  const dateFilter=getDateFilter('perf');
+  const regularTasks=S.tasks.filter(t=>t.member===m.name&&t.task_type!=='常態工作'&&taskInRange(t,dateFilter));
   const done=regularTasks.filter(t=>['early','ontime','over-done'].includes(hp(t).code));
   const cr=regularTasks.length?Math.round(done.length/regularTasks.length*100):0;
   const l3=regularTasks.length?Math.round(regularTasks.filter(t=>t.level==='L3').length/regularTasks.length*100):0;
@@ -978,8 +980,8 @@ function renderPerf(){
     const hasMember=!!(t.member_kr_ref&&String(t.member_kr_ref).trim());
     return s+(hasTeam?50:0)+(hasMember?50:0);
   },0)/regularTasks.length):0;
-  const routineTasks=S.tasks.filter(t=>t.member===m.name&&t.task_type==='常態工作');
-  const routineHours=routineTasks.reduce((s,t)=>s+(+t.actual_hours||0),0);
+  const routineTasks=S.tasks.filter(t=>t.member===m.name&&t.task_type==='常態工作'&&taskInRange(t,dateFilter));
+  const routineHours=Math.round(routineTasks.reduce((s,t)=>s+proratedHours(t,dateFilter),0)*10)/10;
   const dims=[
     {label:'任務完成率',val:cr, target:80,w:WEIGHTS.compRate},
     {label:'L3 承擔比例',val:l3, target:30,w:WEIGHTS.l3},
@@ -988,8 +990,8 @@ function renderPerf(){
   ];
   const score=Math.round(dims.reduce((s,d)=>s+d.val*d.w,0));
   const promote=score>=PROMOTE_THRESHOLD;
-  const overCnt=S.tasks.filter(t=>t.member===m.name&&t.task_type!=='常態工作'&&+t.actual_hours>+t.est_hours).length;
-  const earlyCnt=S.tasks.filter(t=>t.member===m.name&&hp(t).code==='early').length;
+  const overCnt=S.tasks.filter(t=>t.member===m.name&&t.task_type!=='常態工作'&&+t.actual_hours>+t.est_hours&&taskInRange(t,dateFilter)).length;
+  const earlyCnt=S.tasks.filter(t=>t.member===m.name&&hp(t).code==='early'&&taskInRange(t,dateFilter)).length;
   document.getElementById('perf-body').innerHTML=`
     <div class="two">
       <div class="card">
