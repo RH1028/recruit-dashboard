@@ -159,7 +159,7 @@ function getExternalVacancies() {
     };
 
     const TARGET_OWNER  = 'Rita';
-    const TARGET_STATUS = ['錄取', '關缺'];
+    const TARGET_STATUS = ['錄取', '關缺', '補放'];
 
     const results = [];
     for (let i = 1; i < data.length; i++) {
