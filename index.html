@@ -1350,9 +1350,55 @@ function renderVacancy(){
       <td><input class="ic" value="${esc(v.src||'')}" onchange="S.vacancies[${ri}].src=this.value" style="width:68px;font-size:11px" placeholder="來源"></td>
       <td><input class="ic" value="${esc(v.cm||'')}" onchange="S.vacancies[${ri}].cm=this.value" list="cmdl${ri}" style="width:88px;font-size:11px" placeholder="選擇或輸入"><datalist id="cmdl${ri}">${S.members.map(m=>`<option value="${m.name}">`).join('')}<option value="主投"><option value="主管"><option value="內推"><option value="其他"></datalist></td>
       <td><input class="ic" value="${esc(v.status||'')}" onchange="S.vacancies[${ri}].status=this.value" style="width:76px;font-size:11px" placeholder="狀態"></td>
-      <td><button onclick="saveOneVac(${ri})" title="儲存" style="background:var(--p);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;color:#fff;font-size:11px;font-weight:500">儲存</button></td>
+      <td style="white-space:nowrap">${v._source!=='external'?`<button onclick="openEditVac(${ri})" title="編輯" style="background:none;border:.5px solid var(--bdr);border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--p);font-size:11px;margin-right:4px">✏️</button>`:''}<button onclick="saveOneVac(${ri})" title="儲存" style="background:var(--p);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;color:#fff;font-size:11px;font-weight:500">儲存</button></td>
     </tr>`;
   }).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">尚無資料</td></tr>';
+}
+function openEditVac(vi){
+  const v=S.vacancies[vi];
+  openMdl('編輯關缺',`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><div class="ml">職能</div><input class="ic" id="ev-func" value="${esc(v.func||'')}"></div>
+      <div><div class="ml">職等</div><input class="ic" id="ev-level" value="${esc(v.level||'')}"></div>
+      <div><div class="ml">事業</div><input class="ic" id="ev-biz" value="${esc(v.biz||'')}"></div>
+      <div><div class="ml">報到人員</div><input class="ic" id="ev-reporter" value="${esc(v.reporter||'')}"></div>
+      <div><div class="ml">Close Day</div><input type="date" class="ic" id="ev-close" value="${esc(v.close_day||'')}"></div>
+      <div><div class="ml">報到日</div><input type="date" class="ic" id="ev-onboard" value="${esc(v.onboard_day||'')}"></div>
+      <div><div class="ml">來源</div><input class="ic" id="ev-src" value="${esc(v.src||'')}" placeholder="LinkedIn / 內推 / 獵頭"></div>
+      <div><div class="ml">獵才</div><input class="ic" id="ev-cm" value="${esc(v.cm||'')}" list="ev-cmdl" placeholder="選擇或輸入"><datalist id="ev-cmdl">${S.members.map(m=>`<option value="${m.name}">`).join('')}<option value="主投"><option value="主管"><option value="內推"><option value="其他"></datalist></div>
+    </div>
+    <div style="margin-bottom:14px"><div class="ml">狀態</div><input class="ic" id="ev-status" value="${esc(v.status||'')}" style="width:100%" placeholder="Sourcing / 面試中…"></div>
+    <div style="display:flex;justify-content:space-between">
+      <button class="btn" style="color:var(--c);border-color:var(--c)" onclick="deleteVacRow(${vi})">🗑 刪除</button>
+      <button class="btn btp" onclick="saveEditVac(${vi})">↑ 儲存</button>
+    </div>`);
+}
+async function saveEditVac(vi){
+  const v=S.vacancies[vi];
+  v.func=document.getElementById('ev-func').value||'';
+  v.level=document.getElementById('ev-level').value||'';
+  v.biz=document.getElementById('ev-biz').value||'';
+  v.reporter=document.getElementById('ev-reporter').value||'';
+  v.close_day=document.getElementById('ev-close').value||'';
+  v.onboard_day=document.getElementById('ev-onboard').value||'';
+  v.src=document.getElementById('ev-src').value||'';
+  v.cm=document.getElementById('ev-cm').value||'';
+  v.status=document.getElementById('ev-status').value||'';
+  closeMdl(null);renderVacancy();
+  if(S.demo){showToast('Demo 模式');return;}
+  const r=await apiPost({action:'upsertVac',data:v});
+  if(r&&r.success)showToast('已儲存');
+  else alert('儲存失敗：\n'+((r&&r.error)||window.lastApiError||'未知'));
+}
+async function deleteVacRow(vi){
+  const v=S.vacancies[vi];
+  if(!confirm(`確定刪除這筆關缺（${v.func||'?'} / ${v.reporter||'?'}）？`))return;
+  if(!S.demo){
+    const r=await apiPost({action:'deleteVac',data:{vac_id:v.vac_id,_source:v._source}});
+    if(!r||!r.success){alert('刪除失敗：\n'+((r&&r.error)||window.lastApiError||'未知'));return;}
+  }
+  S.vacancies.splice(vi,1);
+  closeMdl(null);renderVacancy();showToast('已刪除');
 }
 function clearVacF(){['vf-cm','vf-func','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderVacancy();}
 async function saveOneVac(vi){
@@ -1383,9 +1429,20 @@ function openAddVac(){openMdl('新增關缺',`
   <div style="margin-bottom:12px"><div class="ml">狀態</div><input class="ic" id="nv-status" placeholder="Sourcing / 面試中…" style="width:100%"></div>
   <button class="btn btp" style="width:100%" onclick="confirmAddVac()">確認新增</button>`);}
 async function confirmAddVac(){
-  const v={vac_id:'V'+Date.now(),func:document.getElementById('nv-func')?.value||'—',level:document.getElementById('nv-level')?.value||'—',biz:document.getElementById('nv-biz')?.value||'—',reporter:document.getElementById('nv-reporter')?.value||'—',close_day:document.getElementById('nv-close')?.value||'',onboard_day:document.getElementById('nv-onboard')?.value||'',src:document.getElementById('nv-src')?.value||'—',cm:document.getElementById('nv-cm')?.value||'—',status:document.getElementById('nv-status')?.value||''};
-  S.vacancies.push(v);closeMdl(null);renderVacancy();showToast('關缺已新增');
-  if(!S.demo)apiPost({action:'upsertVac',data:v});
+  const g=id=>(document.getElementById(id)?.value||'').trim();
+  const v={
+    vac_id:'V'+Date.now(),
+    func:g('nv-func'),level:g('nv-level'),biz:g('nv-biz'),
+    reporter:g('nv-reporter'),
+    close_day:g('nv-close'),onboard_day:g('nv-onboard'),
+    src:g('nv-src'),cm:g('nv-cm'),status:g('nv-status'),
+    _source:'manual',
+  };
+  S.vacancies.push(v);closeMdl(null);renderVacancy();
+  if(S.demo){showToast('Demo 模式（未連線 Sheets）');return;}
+  const r=await apiPost({action:'upsertVac',data:v});
+  if(r&&r.success)showToast('關缺已新增');
+  else alert('新增失敗：\n'+((r&&r.error)||window.lastApiError||'未知'));
 }
 function renderPipeline(){
   const STAGE_CLS={'技術面試':'bp','Offer 談判':'bt','初篩':'bg2',Sourcing:'ba','最終面試':'bp'};

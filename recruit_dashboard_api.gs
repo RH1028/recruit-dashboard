@@ -56,6 +56,7 @@ function doPost(e) {
     const action = body.action;
     if      (action === 'upsertTask')     result = upsertTask(body.data);
     else if (action === 'upsertVac')      result = upsertVac(body.data);
+    else if (action === 'deleteVac')      result = deleteVac(body.data);
     else if (action === 'upsertPipeline') result = upsertPipeline(body.data);
     else if (action === 'upsertLink')     result = upsertLink(body.data);
     else if (action === 'updateOKR')      result = updateOKR(body.data);
@@ -78,6 +79,7 @@ function jsonResponse(obj) {
 
 function getAllData() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
+  const manualVacs = sheetToObjects(ss, 'Vacancies').map(r => ({...r, _source: 'manual'}));
   return {
     tasks:      sheetToObjects(ss, 'Tasks'),
     okr:        sheetToObjects(ss, 'OKR'),
@@ -86,7 +88,7 @@ function getAllData() {
     settings:   settingsToObject(ss),
     pipeline:   sheetToObjects(ss, 'Pipeline'),
     links:      sheetToObjects(ss, 'Links'),
-    vacancies:  getExternalVacancies(), // 來自外部缺額表
+    vacancies:  [...getExternalVacancies(), ...manualVacs], // 外部缺額表 + 手動新增
   };
 }
 
@@ -439,17 +441,33 @@ function upsertRow(sheetId, tabName, idField, data) {
   let   sheet = ss.getSheetByName(tabName);
   if (!sheet) sheet = ss.insertSheet(tabName);
 
-  const allData = sheet.getDataRange().getValues();
-  const header  = allData[0];
-  const idIdx   = header.indexOf(idField);
-
   // 加入 updated_at
   data['updated_at'] = new Date().toISOString();
 
-  const newRow = header.map(h => data[h] !== undefined ? data[h] : '');
+  // 取得/建立表頭
+  let header;
+  if (sheet.getLastRow() === 0) {
+    // 空表：用 data 的 key 自動生成 header（idField 第一、updated_at 最後、底線開頭欄位略過）
+    const dataKeys = Object.keys(data).filter(k => k !== idField && k !== 'updated_at' && !k.startsWith('_'));
+    header = [idField, ...dataKeys, 'updated_at'];
+    sheet.getRange(1, 1, 1, header.length).setValues([header]);
+  } else {
+    header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    // 若 data 帶了新 key 而 header 沒有，把新欄位補到末端（updated_at 前）
+    const missing = Object.keys(data).filter(k => !k.startsWith('_') && header.indexOf(k) < 0);
+    if (missing.length) {
+      const updIdx = header.indexOf('updated_at');
+      const insertAt = updIdx >= 0 ? updIdx : header.length;
+      missing.forEach((k, offset) => sheet.getRange(1, insertAt + 1 + offset).setValue(k));
+      header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    }
+  }
+
+  const allData = sheet.getDataRange().getValues();
+  const idIdx   = header.indexOf(idField);
+  const newRow  = header.map(h => data[h] !== undefined ? data[h] : '');
 
   if (idIdx >= 0 && data[idField]) {
-    // 找現有列
     for (let i = 1; i < allData.length; i++) {
       if (allData[i][idIdx] && allData[i][idIdx].toString() === data[idField].toString()) {
         sheet.getRange(i + 1, 1, 1, header.length).setValues([newRow]);
@@ -457,9 +475,32 @@ function upsertRow(sheetId, tabName, idField, data) {
       }
     }
   }
-  // 新增列
   sheet.appendRow(newRow);
   return { success: true, action: 'inserted' };
+}
+
+// 刪除單筆（用 idField 對應）
+function deleteRow(sheetId, tabName, idField, idValue) {
+  const ss = SpreadsheetApp.openById(sheetId);
+  const sheet = ss.getSheetByName(tabName);
+  if (!sheet) return { success: false, error: tabName + ' sheet 不存在' };
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return { success: false, error: '無資料可刪' };
+  const idIdx = data[0].indexOf(idField);
+  if (idIdx < 0) return { success: false, error: '缺 ' + idField + ' 欄位' };
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][idIdx] && data[i][idIdx].toString() === idValue.toString()) {
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { success: false, error: '找不到 ' + idField + '=' + idValue };
+}
+
+function deleteVac(data) {
+  if (!data || !data.vac_id) return { success: false, error: '缺 vac_id' };
+  if (data._source === 'external') return { success: false, error: '外部資料不可刪除（請至團隊缺額表修改）' };
+  return deleteRow(SHEET_ID, 'Vacancies', 'vac_id', data.vac_id);
 }
 
 // ============================================================
