@@ -526,6 +526,22 @@ function taskInRange(t,filter){
   if(filter.end&&d>filter.end)return false;
   return true;
 }
+// 工時依「任務起訖區間 vs 篩選區間」的重疊天數做線性比例分配
+// 例：任務 4/1~5/27（57 天）60h，篩選 5/20~5/27（8 天）→ 60×8/57 ≈ 8.4h
+// 常態工作或缺起訖日的任務：無法分配 → 直接回傳全額
+function proratedHours(t,filter){
+  const total=+t.actual_hours||0;
+  if(!total)return 0;
+  if(!filter||(!filter.start&&!filter.end))return total;
+  if(!t.start_date||!t.end_date)return total;
+  const fs=filter.start||'0000-01-01',fe=filter.end||'9999-12-31';
+  if(t.end_date<fs||t.start_date>fe)return 0;
+  const oS=t.start_date>fs?t.start_date:fs;
+  const oE=t.end_date<fe?t.end_date:fe;
+  const td=Math.round((new Date(t.end_date)-new Date(t.start_date))/86400000)+1;
+  const od=Math.round((new Date(oE)-new Date(oS))/86400000)+1;
+  return td>0?total*od/td:total;
+}
 function clearVacFilters(){
   ['vf-cm','vf-func','vf-level','vf-status','vf-date-start','vf-date-end'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderVacancy();
@@ -929,8 +945,9 @@ function renderDash(){
     ${(()=>{
     const mn=showMember&&activeDashMember?activeDashMember.name:null;
     const ms=mn?S.members.filter(m=>m.name===mn):S.members;
-    const r=ms.map(m=>{const h=S.tasks.filter(t=>t.task_type==='常態工作'&&t.member===m.name).reduce((a,t)=>a+(+t.actual_hours||0),0);return h>0?(mn?h+'h':m.name+' '+h+'h'):null;}).filter(Boolean).join('　');
-    const p=ms.map(m=>{const h=S.tasks.filter(t=>t.task_type!=='常態工作'&&t.member===m.name).reduce((a,t)=>a+(+t.actual_hours||0),0);return h>0?(mn?h+'h':m.name+' '+h+'h'):null;}).filter(Boolean).join('　');
+    const fmt=h=>Math.round(h*10)/10;
+    const r=ms.map(m=>{const h=fmt(S.tasks.filter(t=>t.task_type==='常態工作'&&t.member===m.name).reduce((a,t)=>a+proratedHours(t,dateFilter),0));return h>0?(mn?h+'h':m.name+' '+h+'h'):null;}).filter(Boolean).join('　');
+    const p=ms.map(m=>{const h=fmt(S.tasks.filter(t=>t.task_type!=='常態工作'&&t.member===m.name).reduce((a,t)=>a+proratedHours(t,dateFilter),0));return h>0?(mn?h+'h':m.name+' '+h+'h'):null;}).filter(Boolean).join('　');
     if(!r&&!p)return '';
     return '<div style="background:var(--gl);border-radius:8px;padding:9px 14px;margin-bottom:14px;font-size:12px;color:var(--gd);display:flex;gap:20px;flex-wrap:wrap">'+(r?'<span>↻ <strong>常態工作累計</strong>：'+r+'</span>':'')+(p?'<span>📋 <strong>專案任務累計</strong>：'+p+'</span>':'')+'</div>';
   })()}
