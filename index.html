@@ -879,7 +879,7 @@ function renderTasks(){
     </tr>`;
   }).join('')||'<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">尚無任務，點右上角新增</td></tr>';
 }
-function addTask(){const t={task_id:'T'+Date.now(),task_name:'新任務',task_type:'專案任務',member:S.members[0]?.name||'',team_kr_ref:'',member_kr_ref:'',level:'L1',est_hours:2,actual_hours:0,completion_pct:0,status:'未開始',note:''};S.tasks.push(t);pendingTasks[t.task_id]=t;renderTasks();}
+function addTask(){const owner=activeTaskMember||S.members[0]?.name||'';const t={task_id:'T'+Date.now(),task_name:'新任務',task_type:'專案任務',member:owner,team_kr_ref:'',member_kr_ref:'',level:'L1',est_hours:2,actual_hours:0,completion_pct:0,status:'未開始',note:''};S.tasks.push(t);pendingTasks[t.task_id]=t;activeTaskMember=null;renderTaskMemberChips();renderTasks();}
 
 // ══ DASH ══
 function renderDash(){
