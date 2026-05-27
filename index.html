@@ -370,6 +370,7 @@ const isLive=()=>{
 let activePerf=0,activeMbpMember=0,okrLocal={},mbpLocal={},pendingTasks={};
 let dashViewMode='team',dashMbrIdx=0;
 let activeTaskMember=null; // null = 全部
+const newTaskIds=new Set(); // 本次 session 新增的任務 id，永遠排在表格最下方
 
 // ══ CONSTANTS ══
 const PROMOTE_THRESHOLD=80;
@@ -827,7 +828,11 @@ function renderTasks(){
   const _so={early:3,ontime:3,'over-done':3,over:1,na:1,routine:2};
   const _ts=[...S.tasks]
     .filter(t=>!activeTaskMember||t.member===activeTaskMember)
-    .sort((a,b)=>(_so[hp(a).code]||1)-(_so[hp(b).code]||1));
+    .sort((a,b)=>{
+      const aNew=newTaskIds.has(a.task_id),bNew=newTaskIds.has(b.task_id);
+      if(aNew!==bNew)return aNew?1:-1;
+      return(_so[hp(a).code]||1)-(_so[hp(b).code]||1);
+    });
   const teamOpts=getTeamKROptions();
   document.getElementById('task-body').innerHTML=_ts.map(t=>{
     const h=hp(t);
@@ -879,7 +884,7 @@ function renderTasks(){
     </tr>`;
   }).join('')||'<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">尚無任務，點右上角新增</td></tr>';
 }
-function addTask(){const owner=activeTaskMember||S.members[0]?.name||'';const t={task_id:'T'+Date.now(),task_name:'新任務',task_type:'專案任務',member:owner,team_kr_ref:'',member_kr_ref:'',level:'L1',est_hours:2,actual_hours:0,completion_pct:0,status:'未開始',note:''};S.tasks.push(t);pendingTasks[t.task_id]=t;renderTasks();}
+function addTask(){const owner=activeTaskMember||S.members[0]?.name||'';const t={task_id:'T'+Date.now(),task_name:'新任務',task_type:'專案任務',member:owner,team_kr_ref:'',member_kr_ref:'',level:'L1',est_hours:2,actual_hours:0,completion_pct:0,status:'未開始',note:''};S.tasks.push(t);pendingTasks[t.task_id]=t;newTaskIds.add(t.task_id);renderTasks();}
 
 // ══ DASH ══
 function renderDash(){
