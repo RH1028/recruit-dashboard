@@ -543,8 +543,8 @@ function proratedHours(t,filter){
   const od=Math.round((new Date(oE)-new Date(oS))/86400000)+1;
   return td>0?total*od/td:total;
 }
-function clearVacFilters(){
-  ['vf-cm','vf-func','vf-level','vf-status','vf-date-start','vf-date-end'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+function clearVacF(){
+  ['vf-cm','vf-func','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderVacancy();
 }
 function populateVacFilters(){
@@ -1071,17 +1071,17 @@ function renderVacancy(){
   populateVacFilters();
   const cm=document.getElementById('vf-cm')?.value||'';
   const func=document.getElementById('vf-func')?.value||'';
-  const level=document.getElementById('vf-level')?.value||'';
-  const status=document.getElementById('vf-status')?.value||'';
-  const dateStart=document.getElementById('vf-date-start')?.value||'';
-  const dateEnd=document.getElementById('vf-date-end')?.value||'';
+  const closeS=document.getElementById('vf-close-s')?.value||'';
+  const closeE=document.getElementById('vf-close-e')?.value||'';
+  const onboardS=document.getElementById('vf-onboard-s')?.value||'';
+  const onboardE=document.getElementById('vf-onboard-e')?.value||'';
   const filtered=S.vacancies.filter(v=>{
     if(cm&&v.cm!==cm)return false;
     if(func&&v.func!==func)return false;
-    if(level&&v.level!==level)return false;
-    if(status&&v.status!==status)return false;
-    if(dateStart&&v.open_date&&v.open_date<dateStart)return false;
-    if(dateEnd&&v.open_date&&v.open_date>dateEnd)return false;
+    if(closeS&&v.close_day&&v.close_day<closeS)return false;
+    if(closeE&&v.close_day&&v.close_day>closeE)return false;
+    if(onboardS&&v.onboard_day&&v.onboard_day<onboardS)return false;
+    if(onboardE&&v.onboard_day&&v.onboard_day>onboardE)return false;
     return true;
   });
   const countEl=document.getElementById('vac-filter-count');
