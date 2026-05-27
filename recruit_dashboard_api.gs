@@ -5,7 +5,7 @@
 //  存取權限：任何人
 // ============================================================
 
-const SHEET_ID = 'YOUR_GOOGLE_SHEET_ID'; // ← 換成你的 Dashboard DB Sheet ID
+const SHEET_ID = '1R8TKDQlN3VhG7NP6w9aZtD_qIFkk2b2WCp-yhDAvBos'; // Dashboard DB Sheet ID
 
 // 外部缺額表 Sheet ID（唯讀，篩選 Rita 的錄取 & 關缺）
 const VACANCY_SHEET_ID = '13Y61X61FQrBUExiHLvS6LzNXR0DMp6XD-EVtxGj6G9M';
