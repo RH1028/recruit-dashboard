@@ -1090,6 +1090,13 @@ function renderVacancy(){
     if(onboardS&&v.onboard_day&&v.onboard_day<onboardS)return false;
     if(onboardE&&v.onboard_day&&v.onboard_day>onboardE)return false;
     return true;
+  }).sort((a,b)=>{
+    // 依 close_day 由近到遠排序（最新在上）；無 close_day 者排最後
+    const ad=a.close_day||'',bd=b.close_day||'';
+    if(!ad&&!bd)return 0;
+    if(!ad)return 1;
+    if(!bd)return -1;
+    return bd.localeCompare(ad);
   });
   const countEl=document.getElementById('vac-filter-count');
   if(countEl){
