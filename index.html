@@ -1085,7 +1085,18 @@ function renderVacancy(){
     return true;
   });
   const countEl=document.getElementById('vac-filter-count');
-  if(countEl)countEl.textContent=filtered.length<S.vacancies.length?`顯示 ${filtered.length} / ${S.vacancies.length} 筆`:'';
+  if(countEl){
+    const active=[];
+    if(cm)active.push('CM='+cm);
+    if(func)active.push('職能='+func);
+    if(closeS||closeE)active.push(`Close ${closeS||'—'}~${closeE||'—'}`);
+    if(onboardS||onboardE)active.push(`報到 ${onboardS||'—'}~${onboardE||'—'}`);
+    if(active.length){
+      countEl.innerHTML=`<span class="bdg bp" style="font-size:11px">✓ 篩選中：顯示 ${filtered.length} / ${S.vacancies.length} 筆</span> <span style="font-size:10px;color:var(--muted)">（${active.join('、')}）</span>`;
+    }else{
+      countEl.innerHTML=`<span style="font-size:11px;color:var(--muted)">共 ${S.vacancies.length} 筆</span>`;
+    }
+  }
   document.getElementById('vac-body').innerHTML=filtered.map((v,vi)=>{
     const realIdx=S.vacancies.indexOf(v);
     return `<tr>
