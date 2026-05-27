@@ -307,8 +307,9 @@ tr:last-child td{border-bottom:none}
         <div id="vac-list-section">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px 14px;background:var(--bg);border-radius:var(--rs)">
             <span style="font-size:11px;color:var(--muted);align-self:flex-end;padding-bottom:3px">篩選：</span>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">CM 獵才</div><select class="ic" id="vf-cm" onchange="renderVacancy()" style="width:76px"><option value="">全部</option></select></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">獵才</div><select class="ic" id="vf-cm" onchange="renderVacancy()" style="width:76px"><option value="">全部</option></select></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職能</div><select class="ic" id="vf-func" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">來源</div><select class="ic" id="vf-src" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（起）</div><input type="date" class="ic" id="vf-close-s" onchange="renderVacancy()" style="width:122px"></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（迄）</div><input type="date" class="ic" id="vf-close-e" onchange="renderVacancy()" style="width:122px"></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">報到日（起）</div><input type="date" class="ic" id="vf-onboard-s" onchange="renderVacancy()" style="width:122px"></div>
@@ -544,13 +545,17 @@ function proratedHours(t,filter){
   return td>0?total*od/td:total;
 }
 function clearVacF(){
-  ['vf-cm','vf-func','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['vf-cm','vf-func','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderVacancy();
 }
 function populateVacFilters(){
-  const sets={cm:new Set(),func:new Set(),level:new Set(),status:new Set()};
-  S.vacancies.forEach(v=>{if(v.cm)sets.cm.add(v.cm);if(v.func)sets.func.add(v.func);if(v.level)sets.level.add(v.level);if(v.status)sets.status.add(v.status);});
-  const map={cm:'vf-cm',func:'vf-func',level:'vf-level',status:'vf-status'};
+  const sets={cm:new Set(),func:new Set(),src:new Set()};
+  S.vacancies.forEach(v=>{
+    if(v.cm)sets.cm.add(v.cm);
+    if(v.func)sets.func.add(v.func);
+    if(v.src)sets.src.add(v.src);
+  });
+  const map={cm:'vf-cm',func:'vf-func',src:'vf-src'};
   Object.entries(map).forEach(([k,id])=>{
     const el=document.getElementById(id);if(!el)return;
     const cur=el.value;
@@ -1071,6 +1076,7 @@ function renderVacancy(){
   populateVacFilters();
   const cm=document.getElementById('vf-cm')?.value||'';
   const func=document.getElementById('vf-func')?.value||'';
+  const src=document.getElementById('vf-src')?.value||'';
   const closeS=document.getElementById('vf-close-s')?.value||'';
   const closeE=document.getElementById('vf-close-e')?.value||'';
   const onboardS=document.getElementById('vf-onboard-s')?.value||'';
@@ -1078,6 +1084,7 @@ function renderVacancy(){
   const filtered=S.vacancies.filter(v=>{
     if(cm&&v.cm!==cm)return false;
     if(func&&v.func!==func)return false;
+    if(src&&v.src!==src)return false;
     if(closeS&&v.close_day&&v.close_day<closeS)return false;
     if(closeE&&v.close_day&&v.close_day>closeE)return false;
     if(onboardS&&v.onboard_day&&v.onboard_day<onboardS)return false;
@@ -1087,8 +1094,9 @@ function renderVacancy(){
   const countEl=document.getElementById('vac-filter-count');
   if(countEl){
     const active=[];
-    if(cm)active.push('CM='+cm);
+    if(cm)active.push('獵才='+cm);
     if(func)active.push('職能='+func);
+    if(src)active.push('來源='+src);
     if(closeS||closeE)active.push(`Close ${closeS||'—'}~${closeE||'—'}`);
     if(onboardS||onboardE)active.push(`報到 ${onboardS||'—'}~${onboardE||'—'}`);
     if(active.length){
@@ -1107,7 +1115,7 @@ function renderVacancy(){
     <td style="font-size:11px;color:var(--muted)">${esc(v.onboard_day||'—')}</td>
     <td style="font-size:12px">${esc(v.reporter||'—')}</td>
     <td><span class="bdg bg2">${esc(v.src||'—')}</span></td>
-    <td><input class="ic" value="${esc(v.cm||'')}" onchange="S.vacancies[${realIdx}].cm=this.value" style="width:60px;font-size:11px" placeholder="CM"></td>
+    <td><input class="ic" value="${esc(v.cm||'')}" onchange="S.vacancies[${realIdx}].cm=this.value" style="width:60px;font-size:11px" placeholder="獵才"></td>
     <td><span class="bdg ${VST[v.status]||'bg2'}">${esc(v.status||'—')}</span></td>
     <td><button onclick="saveVac(${realIdx})" title="儲存此列" class="btn bts" style="padding:3px 8px;font-size:11px;color:var(--p)">↑</button></td>
   </tr>`;}).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">尚無符合條件的資料</td></tr>';
@@ -1120,7 +1128,7 @@ function openAddVac(){openMdl('新增關缺',`
     <div><div class="ml">職級</div><input class="ic" id="nv-level" placeholder="Senior / Mid / Junior"></div>
     <div><div class="ml">事業</div><input class="ic" id="nv-biz" placeholder="技術事業群"></div>
     <div><div class="ml">來源</div><input class="ic" id="nv-src" placeholder="LinkedIn / 內推 / 獵頭"></div>
-    <div><div class="ml">CM 獵才</div><select class="ic" id="nv-cm">${S.members.map(m=>`<option>${m.name}</option>`).join('')}</select></div>
+    <div><div class="ml">獵才</div><select class="ic" id="nv-cm">${S.members.map(m=>`<option>${m.name}</option>`).join('')}</select></div>
   </div>
   <div style="margin-bottom:14px"><div class="ml">狀態</div><select class="ic" id="nv-status">${['Sourcing','初篩','面試中','Offer 談判','JD 準備'].map(s=>`<option>${s}</option>`).join('')}</select></div>
   <button class="btn btp" style="width:100%" onclick="confirmAddVac()">確認新增</button>`);}
