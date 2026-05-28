@@ -943,7 +943,7 @@ function renderDash(){
   const done=regularTasks.filter(t=>DONE_CODES.includes(hp(t).code));
   const inprog=regularTasks.filter(t=>INPROG_CODES.includes(hp(t).code));
   const notstart=regularTasks.filter(t=>NOSTART_CODES.includes(hp(t).code));
-  const routineTasks=S.tasks.filter(t=>t.task_type==='常態工作');
+  const routineTasks=S.tasks.filter(t=>t.task_type==='常態工作'&&(!_mName||t.member===_mName)&&taskInRange(t,dateFilter));
   const overT=S.tasks.filter(t=>t.task_type!=='常態工作'&&+t.actual_hours>+t.est_hours);
   const showMember=dashViewMode==='member';
   const activeDashMember=showMember?S.members[dashMbrIdx]:null;
@@ -965,6 +965,7 @@ function renderDash(){
     </div>
     <div class="mgrid">
       <div class="mc"><div class="ml">專案任務總數</div><div class="mv">${regularTasks.length}</div></div>
+      <div class="mc" style="cursor:pointer" onclick="openDashDetail('routine')"><div class="ml">常態工作 <span style="font-size:9px;color:var(--gd)">▸ 明細</span></div><div class="mv" style="color:var(--gd)">${routineTasks.length}</div></div>
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('done')"><div class="ml">已完成 <span style="font-size:9px;color:var(--t)">▸ 明細</span></div><div class="mv" style="color:var(--t)">${done.length}</div></div>
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('inprog')"><div class="ml">進行中 <span style="font-size:9px;color:var(--p)">▸ 明細</span></div><div class="mv" style="color:var(--p)">${inprog.length}</div></div>
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('notstart')"><div class="ml">未開始 <span style="font-size:9px;color:var(--muted)">▸ 明細</span></div><div style="font-size:9px;color:var(--muted);margin-top:-2px;margin-bottom:2px;font-style:italic">未到日期 / 待設日期</div><div class="mv" style="color:var(--muted)">${notstart.length}</div></div>
@@ -1285,6 +1286,13 @@ function switchVTab(tab){
 function openDashDetail(type){
   const mName=dashViewMode==='member'?S.members[dashMbrIdx]?.name:null;
   const base=mName?S.tasks.filter(t=>t.member===mName):S.tasks;
+  const sfxR=mName?` — ${mName}`:'';
+  if(type==='routine'){
+    const routine=base.filter(t=>t.task_type==='常態工作');
+    const totalH=Math.round(routine.reduce((s,t)=>s+(+t.actual_hours||0),0)*10)/10;
+    openMdl(`常態工作（${routine.length} 筆）${sfxR}`,`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--gl);border-radius:6px;font-size:12px;color:var(--gd)">↻ 累計工時：<strong>${totalH}h</strong></div><table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>累計實際h</th><th>起始日期</th><th>結束日期</th><th>備註</th></tr></thead><tbody>${routine.map(t=>`<tr><td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.actual_hours||0}h</td><td style="font-size:11px;color:var(--muted)">${esc(t.start_date||'—')}</td><td style="font-size:11px;color:var(--muted)">${esc(t.end_date||'—')}</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>'}</tbody></table>`);
+    return;
+  }
   const done=base.filter(t=>t.task_type!=='常態工作'&&['early','ontime','over-done'].includes(hp(t).code));
   const inprog=base.filter(t=>t.task_type!=='常態工作'&&['inprog','over'].includes(hp(t).code));
   const notstart=base.filter(t=>t.task_type!=='常態工作'&&['notyet','nodate'].includes(hp(t).code));
