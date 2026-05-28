@@ -1233,7 +1233,19 @@ function openEditPipeline(pi){
 async function saveEditPipeline(pi){
   S.pipeline[pi]={...S.pipeline[pi],name:document.getElementById('ep-name').value,role:document.getElementById('ep-role').value,stage:document.getElementById('ep-stage').value,src:document.getElementById('ep-src').value,rec:document.getElementById('ep-rec').value,note:document.getElementById('ep-note').value};
   closeMdl(null);renderPipeline();
-  if(!S.demo){await apiPost({action:'upsertPipeline',data:S.pipeline[pi]});showToast('已儲存');}
+  if(S.demo){showToast('Demo 模式');return;}
+  const r=await apiPost({action:'upsertPipeline',data:S.pipeline[pi]});
+  if(r&&r.success)showToast('已儲存');
+  else alert('儲存失敗：\n'+((r&&r.error)||window.lastApiError||'未知'));
+}
+async function deletePipelineCard(pi){
+  const p=S.pipeline[pi];if(!p)return;
+  if(!confirm(`確定刪除候選人「${p.name||'?'}」？`))return;
+  if(!S.demo){
+    const r=await apiPost({action:'deletePipeline',data:{pip_id:p.pip_id}});
+    if(!r||!r.success){alert('刪除失敗：\n'+((r&&r.error)||window.lastApiError||'未知'));return;}
+  }
+  S.pipeline.splice(pi,1);closeMdl(null);renderPipeline();showToast('已刪除');
 }
 
 // ══ LINKS ══
@@ -1502,8 +1514,8 @@ function openEditPipeline(pi){
     </div>
     <div style="margin-bottom:14px"><div class="ml">備註</div><textarea class="ic" id="ep-note" rows="3" style="resize:vertical">${esc(p.note)}</textarea></div>
     <div style="display:flex;justify-content:space-between">
-      <button class="btn" style="color:var(--c);border-color:var(--c)" onclick="S.pipeline.splice(${pi},1);closeMdl(null);renderPipeline()">刪除</button>
-      <button class="btn btp" onclick="(()=>{S.pipeline[${pi}]={...S.pipeline[${pi}],name:document.getElementById('ep-name').value,role:document.getElementById('ep-role').value,stage:document.getElementById('ep-stage').value,src:document.getElementById('ep-src').value,rec:document.getElementById('ep-rec').value,note:document.getElementById('ep-note').value};closeMdl(null);renderPipeline();})()">↑ 儲存</button>
+      <button class="btn" style="color:var(--c);border-color:var(--c)" onclick="deletePipelineCard(${pi})">刪除</button>
+      <button class="btn btp" onclick="saveEditPipeline(${pi})">↑ 儲存</button>
     </div>`);}
 function setDashV(v,btn){
   dashViewMode=v;

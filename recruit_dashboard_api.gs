@@ -55,9 +55,11 @@ function doPost(e) {
   try {
     const action = body.action;
     if      (action === 'upsertTask')     result = upsertTask(body.data);
+    else if (action === 'deleteTask')     result = deleteTask(body.data);
     else if (action === 'upsertVac')      result = upsertVac(body.data);
     else if (action === 'deleteVac')      result = deleteVac(body.data);
     else if (action === 'upsertPipeline') result = upsertPipeline(body.data);
+    else if (action === 'deletePipeline') result = deletePipeline(body.data);
     else if (action === 'upsertLink')     result = upsertLink(body.data);
     else if (action === 'updateOKR')      result = updateOKR(body.data);
     else result = { error: 'Unknown action' };
@@ -501,6 +503,16 @@ function deleteVac(data) {
   if (!data || !data.vac_id) return { success: false, error: '缺 vac_id' };
   if (data._source === 'external') return { success: false, error: '外部資料不可刪除（請至團隊缺額表修改）' };
   return deleteRow(SHEET_ID, 'Vacancies', 'vac_id', data.vac_id);
+}
+
+function deletePipeline(data) {
+  if (!data || !data.pip_id) return { success: false, error: '缺 pip_id' };
+  return deleteRow(SHEET_ID, 'Pipeline', 'pip_id', data.pip_id);
+}
+
+function deleteTask(data) {
+  if (!data || !data.task_id) return { success: false, error: '缺 task_id' };
+  return deleteRow(SHEET_ID, 'Tasks', 'task_id', data.task_id);
 }
 
 // ============================================================
