@@ -869,13 +869,18 @@ function onField(id,f,v){
 function onTypeChange(id,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t.task_type=v;if(v==='常態工作')t.completion_pct=0;pendingTasks[id]=t;renderTasks();}
 
 function renderTasks(){
-  const _so={early:3,ontime:3,'over-done':3,over:1,na:1,routine:2};
   const _ts=[...S.tasks]
     .filter(t=>!activeTaskMember||t.member===activeTaskMember)
     .sort((a,b)=>{
+      // 1) 完成（100%）的專案任務一律沉底
+      const aDone=a.task_type!=='常態工作'&&+a.completion_pct===100;
+      const bDone=b.task_type!=='常態工作'&&+b.completion_pct===100;
+      if(aDone!==bDone)return aDone?1:-1;
+      // 2) 本次新增其次
       const aNew=newTaskIds.has(a.task_id),bNew=newTaskIds.has(b.task_id);
       if(aNew!==bNew)return aNew?1:-1;
-      return(_so[hp(a).code]||1)-(_so[hp(b).code]||1);
+      // 3) 同組內依結束日期排序（無日期者排後）
+      return(a.end_date||'9999').localeCompare(b.end_date||'9999');
     });
   const teamOpts=getTeamKROptions();
   document.getElementById('task-body').innerHTML=_ts.map(t=>{
