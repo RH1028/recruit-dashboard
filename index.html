@@ -224,10 +224,18 @@ tr:last-child td{border-bottom:none}
         <div style="font-size:10px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:var(--bg);border-radius:var(--rs)">
           📌 <strong>常態工作</strong>（如每日 Sourcing、定期報表）：不計入任務完成率，僅累計工時，無完成度設定。
         </div>
-        <!-- 負責人篩選 -->
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <!-- 負責人篩選 + 日期篩選 -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <span style="font-size:11px;color:var(--muted)">負責人：</span>
           <div class="mchips" id="task-member-chips" style="margin:0"></div>
+          <div style="width:1px;height:24px;background:var(--bdr);flex-shrink:0"></div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)">
+            <span>起</span>
+            <input type="date" class="ic" id="task-date-start" style="width:130px" onchange="renderTasks()">
+            <span>→</span>
+            <input type="date" class="ic" id="task-date-end" style="width:130px" onchange="renderTasks()">
+          </div>
+          <button class="btn bts" onclick="clearTaskDate()" style="font-size:10px;color:var(--muted)">清除時間</button>
         </div>
         <div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto">
           <table style="min-width:1100px">
@@ -536,6 +544,10 @@ function clearDashDate(){
 function clearPerfDate(){
   const s=document.getElementById('perf-date-start'),e=document.getElementById('perf-date-end');
   if(s)s.value='';if(e)e.value='';renderPerf();
+}
+function clearTaskDate(){
+  const s=document.getElementById('task-date-start'),e=document.getElementById('task-date-end');
+  if(s)s.value='';if(e)e.value='';renderTasks();
 }
 function getDateFilter(prefix){
   const s=document.getElementById(prefix+'-date-start'),e=document.getElementById(prefix+'-date-end');
@@ -869,8 +881,10 @@ function onField(id,f,v){
 function onTypeChange(id,v){const t=S.tasks.find(t=>t.task_id===id);if(!t)return;t.task_type=v;if(v==='常態工作')t.completion_pct=0;pendingTasks[id]=t;renderTasks();}
 
 function renderTasks(){
+  const _tf=getDateFilter('task');
   const _ts=[...S.tasks]
     .filter(t=>!activeTaskMember||t.member===activeTaskMember)
+    .filter(t=>taskInRange(t,_tf))
     .sort((a,b)=>{
       // 1) 完成（100%）的專案任務一律沉底
       const aDone=a.task_type!=='常態工作'&&+a.completion_pct===100;
