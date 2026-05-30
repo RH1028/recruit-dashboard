@@ -7,9 +7,10 @@
 
 const SHEET_ID = '1R8TKDQlN3VhG7NP6w9aZtD_qIFkk2b2WCp-yhDAvBos'; // Dashboard DB Sheet ID
 
-// 外部缺額表 Sheet ID（唯讀，篩選 Rita 的錄取 & 關缺）
-const VACANCY_SHEET_ID = '13Y61X61FQrBUExiHLvS6LzNXR0DMp6XD-EVtxGj6G9M';
-const VACANCY_TAB_GID  = '1251169333'; // 職缺表 tab
+// 外部缺額表 Sheet ID（唯讀，讀 4 個部門分頁，篩選 Status）
+const VACANCY_SHEET_ID = '1hGbY4FyRjRMpGb1NVj59D7epk7eas7dW-FL0PVHXXas';
+const VACANCY_TABS     = ['AI技術應用組', '工程部', '行銷運營部門', '業務部']; // 逐分頁讀取再合併
+const VACANCY_STATUS   = ['錄取', '補缺', '內轉補缺']; // 只取這些 Status
 
 // ── 允許 CORS，讓前端 Dashboard 可以呼叫 ──
 function doGet(e) {
@@ -118,99 +119,82 @@ function getSettings() {
 
 // ============================================================
 //  外部缺額表串接（唯讀）
-//  篩選條件：窗口 = "Rita"  且  Status = "錄取" 或 "補缺"
-//  欄位對應（缺額表 → Dashboard）：
-//    職能      = 職能  (col B)
-//    職等      = 職等  (col H，原「職等」)
-//    事業      = 事業  (col I，原「事業」)
-//    close day = close day (col AB)
-//    報到日    = 報到日    (col AC)
-//    報到人員  = 報到人員  (col AD)
-//    來源      = 開缺原因  (col L，僅作參考；可手動覆寫)
-//    獵才      = 窗口      (col D，即 Rita)
-//    狀態      = Status    (col T)
+//  資料來源：4 個部門分頁（VACANCY_TABS），逐一讀取再合併
+//  篩選條件：Status ∈ {錄取, 補缺, 內轉補缺}（VACANCY_STATUS）
+//  欄位對應（缺額表表頭 → Dashboard 欄位）：
+//    職能      = 職能
+//    事業      = 事業
+//    close day = close day
+//    報到日    = 報到日
+//    報到人員  = 報到人員
+//    職等      = 職等   ← 表尾那個（report 區，lastIndexOf，非開缺區 col H）
+//    職級      = 職級
+//    管道      = 管道
+//    來源      = 來源
+//    部門      = 分頁名稱（tab name）
+//    狀態      = Status
 // ============================================================
 
 function getExternalVacancies() {
+  const results = [];
   try {
-    const overrides = _readVacOverrides();  // 從 dashboard DB 讀 cm/src/status
+    const ss = SpreadsheetApp.openById(VACANCY_SHEET_ID);
+    VACANCY_TABS.forEach(function (tabName) {
+      const sheet = ss.getSheetByName(tabName);
+      if (!sheet) { Logger.log('缺額表找不到分頁：' + tabName); return; }
+      const data = sheet.getDataRange().getValues();
+      if (data.length < 2) return;
+      const header = data[0];
 
-    const ss  = SpreadsheetApp.openById(VACANCY_SHEET_ID);
-    // 取得職缺表 tab（以 gid 或名稱）
-    const sheets = ss.getSheets();
-    let sheet = sheets.find(s => s.getSheetId().toString() === VACANCY_TAB_GID);
-    if (!sheet) sheet = ss.getSheetByName('職缺表') || ss.getSheets()[0];
-
-    const data   = sheet.getDataRange().getValues();
-    const header = data[0]; // 第一列為欄位名稱
-
-    // 建立欄位索引
-    const col = (name) => header.indexOf(name);
-    const C = {
-      dept:     col('部門'),
-      func:     col('職能'),
-      title:    col('中文職稱'),
-      level:    col('職等'),
-      biz_grp:  col('部門/事業群'),
-      biz:      col('事業'),
-      team:     col('團隊'),
-      owner:    col('窗口'),      // 篩選用
-      open_date: col('開缺日期'),
-      status:   col('Status'),    // 篩選用
-      close_day: col('close day'),
-      onboard:  col('報到日'),
-      reporter: col('報到人員'),
-      reason:   col('開缺原因'),
-      job_no:   col('職缺編號'),
-    };
-
-    const TARGET_OWNER  = 'Rita';
-    const TARGET_STATUS = ['錄取', '補缺'];
-
-    const results = [];
-    for (let i = 1; i < data.length; i++) {
-      const row    = data[i];
-      const owner  = (row[C.owner]  || '').toString().trim();
-      const status = (row[C.status] || '').toString().trim();
-
-      if (owner !== TARGET_OWNER) continue;
-      if (!TARGET_STATUS.includes(status)) continue;
-
-      const jobNo = (row[C.job_no] || '').toString().trim();
-      const rowData = {
-        job_no:      jobNo,
-        title:       row[C.title]    || '',
-        reporter:    row[C.reporter] || '',
-        close_day:   formatDate(row[C.close_day]),
-        onboard_day: formatDate(row[C.onboard]),
+      const col  = (name) => header.indexOf(name);
+      const colL = (name) => header.lastIndexOf(name); // 重複欄位取最後一個
+      const C = {
+        func:      col('職能'),
+        biz:       col('事業'),
+        close_day: col('close day'),
+        onboard:   col('報到日'),
+        reporter:  col('報到人員'),
+        level:     colL('職等'),   // 表尾的職等（接近職級那一欄）
+        grade:     col('職級'),
+        channel:   col('管道'),
+        src:       col('來源'),
+        status:    col('Status'),
+        title:     col('中文職稱'),
+        job_no:    col('單號'),
       };
-      const key = _vacOverrideKey(rowData);
-      const ov  = overrides[key] || {};
 
-      results.push({
-        vac_id:     'EXT-' + (i + 1),
-        func:       row[C.func]      || '',
-        level:      row[C.level]     || '',
-        biz:        row[C.biz]       || row[C.biz_grp] || '',
-        close_day:  rowData.close_day,
-        onboard_day: rowData.onboard_day,
-        reporter:   rowData.reporter,
-        src:        ov.src    || '',  // 來自 VacOverrides（使用者編輯）
-        cm:         ov.cm     || '',  // 來自 VacOverrides（使用者編輯）
-        status:     ov.status || '',  // 來自 VacOverrides（使用者編輯）
-        // 附加資訊（備查 + 給 upsertVac 算 key 用）
-        title:      rowData.title,
-        open_date:  formatDate(row[C.open_date]),
-        job_no:     jobNo,
-        _override_key: key,
-        _source:    'external',
-      });
-    }
+      const get  = (row, idx) => idx >= 0 ? (row[idx] || '') : '';
+      const date = (row, idx) => idx >= 0 ? formatDate(row[idx]) : '';
+
+      for (let i = 1; i < data.length; i++) {
+        const row    = data[i];
+        const status = get(row, C.status).toString().trim();
+        if (!VACANCY_STATUS.includes(status)) continue;
+
+        results.push({
+          vac_id:      'EXT-' + tabName + '-' + (i + 1),
+          dept:        tabName,                       // 部門 = 分頁名稱
+          func:        get(row, C.func),
+          level:       get(row, C.level),
+          grade:       get(row, C.grade),
+          biz:         get(row, C.biz),
+          close_day:   date(row, C.close_day),
+          onboard_day: date(row, C.onboard),
+          reporter:    get(row, C.reporter),
+          channel:     get(row, C.channel),
+          src:         get(row, C.src),
+          status:      status,
+          title:       get(row, C.title),
+          job_no:      get(row, C.job_no).toString().trim(),
+          _source:     'external',
+        });
+      }
+    });
     return results;
   } catch (err) {
-    // 若外部 Sheet 讀不到，回傳空陣列不中斷
+    // 若外部 Sheet 讀不到，回傳已收集到的部分，不整批中斷
     Logger.log('getExternalVacancies error: ' + err.message);
-    return [];
+    return results;
   }
 }
 

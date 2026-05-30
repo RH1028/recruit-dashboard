@@ -315,8 +315,9 @@ tr:last-child td{border-bottom:none}
         <div id="vac-list-section">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px 14px;background:var(--bg);border-radius:var(--rs)">
             <span style="font-size:11px;color:var(--muted);align-self:flex-end;padding-bottom:3px">篩選：</span>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">獵才</div><select class="ic" id="vf-cm" onchange="renderVacancy()" style="width:76px"><option value="">全部</option></select></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">部門</div><select class="ic" id="vf-dept" onchange="renderVacancy()" style="width:100px"><option value="">全部</option></select></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職能</div><select class="ic" id="vf-func" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">管道</div><select class="ic" id="vf-channel" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">來源</div><select class="ic" id="vf-src" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（起）</div><input type="date" class="ic" id="vf-close-s" onchange="renderVacancy()" style="width:122px"></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（迄）</div><input type="date" class="ic" id="vf-close-e" onchange="renderVacancy()" style="width:122px"></div>
@@ -328,7 +329,7 @@ tr:last-child td{border-bottom:none}
           <div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto">
             <table>
               <thead><tr>
-                <th>職能</th><th>職等</th><th>事業</th><th>Close Day</th><th>報到日</th><th>報到人員</th><th>來源</th><th>獵才</th><th>狀態</th><th></th>
+                <th>部門</th><th>職能</th><th>職等</th><th>職級</th><th>事業</th><th>Close Day</th><th>報到日</th><th>報到人員</th><th>管道</th><th>來源</th><th>狀態</th><th></th>
               </tr></thead>
               <tbody id="vac-body"></tbody>
             </table>
@@ -385,7 +386,7 @@ const newTaskIds=new Set(); // 本次 session 新增的任務 id，永遠排在�
 const PROMOTE_THRESHOLD=80;
 const WEIGHTS={compRate:.30,l3:.20,hourAcc:.30,krLink:.20};
 const LV={L1:'bn',L2:'ba',L3:'bc'};
-const VST={'面試中':'bp','Offer 談判':'bt',Sourcing:'ba',初篩:'bg2','JD 準備':'bc'};
+const VST={'錄取':'bt','補缺':'bp','內轉補缺':'ba','面試中':'bp','Offer 談判':'bt',Sourcing:'ba',初篩:'bg2','JD 準備':'bc'};
 
 // ══ DEMO DATA ══
 const DEMO_MEMBERS=[{name:'Ava',color:'#7F77DD'},{name:'Ben',color:'#1D9E75'},{name:'Cleo',color:'#D85A30'}];
@@ -410,12 +411,12 @@ function getDemoTasks(){
   {task_id:'T8',task_name:'面試官培訓簡報',    task_type:'專案任務',member:'Ava', team_kr_ref:teamKR1Social,member_kr_ref:mbpKR1,level:'L2',est_hours:5,  actual_hours:4.5,completion_pct:100,status:'完成',  note:'',start_date:'2026-04-01',end_date:'2026-05-01'},
 ];}
 function getDemoVac(){return[
-  // Demo 資料模擬外部缺額表（窗口=Rita, Status=錄取 or 關缺）
-  {vac_id:'EXT-1',func:'行銷運營組',level:'2',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',src:'',cm:'',status:'',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-2',func:'行銷運營組',level:'2',biz:'合作夥伴事業群',close_day:'2025-10-09',onboard_day:'2025-10-27',reporter:'王怡方',src:'',cm:'',status:'',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-3',func:'行銷運營組',level:'2',biz:'消費事業',close_day:'2026-01-16',onboard_day:'2026-02-23',reporter:'馬筱淳',src:'',cm:'',status:'',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-4',func:'行銷運營組',level:'3',biz:'消費事業',close_day:'2024-08-12',onboard_day:'2024-09-18',reporter:'彭聿采',src:'',cm:'',status:'',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-5',func:'大數據組',  level:'2',biz:'部門',       close_day:'2024-06-25',onboard_day:'2024-10-01',reporter:'廖偉丞',src:'',cm:'',status:'',title:'Big Data Engineer',_source:'external'},
+  // Demo 資料模擬外部缺額表（4 部門分頁，Status ∈ 錄取/補缺/內轉補缺）
+  {vac_id:'EXT-1',dept:'行銷運營部門',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',channel:'獵頭',src:'LinkedIn',status:'錄取',title:'資深行銷運營專員',_source:'external'},
+  {vac_id:'EXT-2',dept:'行銷運營部門',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'合作夥伴事業群',close_day:'2025-10-09',onboard_day:'2025-10-27',reporter:'王怡方',channel:'內推',src:'員工推薦',status:'補缺',title:'資深行銷運營專員',_source:'external'},
+  {vac_id:'EXT-3',dept:'工程部',func:'後端工程組',level:'P6',grade:'技術主管',biz:'消費事業',close_day:'2026-01-16',onboard_day:'2026-02-23',reporter:'馬筱淳',channel:'主動應徵',src:'104',status:'內轉補缺',title:'後端工程師',_source:'external'},
+  {vac_id:'EXT-4',dept:'AI技術應用組',func:'大數據組',level:'P6',grade:'資深工程師',biz:'部門',close_day:'2024-08-12',onboard_day:'2024-09-18',reporter:'彭聿采',channel:'獵頭',src:'CakeResume',status:'錄取',title:'Big Data Engineer',_source:'external'},
+  {vac_id:'EXT-5',dept:'業務部',func:'業務開發組',level:'P4',grade:'專員',biz:'部門',close_day:'2024-06-25',onboard_day:'2024-10-01',reporter:'廖偉丞',channel:'主動應徵',src:'LinkedIn',status:'補缺',title:'業務開發專員',_source:'external'},
 ];}
 
 function getDemoPipeline(){return[
@@ -579,17 +580,18 @@ function proratedHours(t,filter){
   return td>0?total*od/td:total;
 }
 function clearVacF(){
-  ['vf-cm','vf-func','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['vf-dept','vf-func','vf-channel','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderVacancy();
 }
 function populateVacFilters(){
-  const sets={cm:new Set(),func:new Set(),src:new Set()};
+  const sets={dept:new Set(),func:new Set(),channel:new Set(),src:new Set()};
   S.vacancies.forEach(v=>{
-    if(v.cm)sets.cm.add(v.cm);
+    if(v.dept)sets.dept.add(v.dept);
     if(v.func)sets.func.add(v.func);
+    if(v.channel)sets.channel.add(v.channel);
     if(v.src)sets.src.add(v.src);
   });
-  const map={cm:'vf-cm',func:'vf-func',src:'vf-src'};
+  const map={dept:'vf-dept',func:'vf-func',channel:'vf-channel',src:'vf-src'};
   Object.entries(map).forEach(([k,id])=>{
     const el=document.getElementById(id);if(!el)return;
     const cur=el.value;
@@ -1116,16 +1118,18 @@ function switchVacTab(tab,btn){
 }
 function renderVacancy(){
   populateVacFilters();
-  const cm=document.getElementById('vf-cm')?.value||'';
+  const dept=document.getElementById('vf-dept')?.value||'';
   const func=document.getElementById('vf-func')?.value||'';
+  const channel=document.getElementById('vf-channel')?.value||'';
   const src=document.getElementById('vf-src')?.value||'';
   const closeS=document.getElementById('vf-close-s')?.value||'';
   const closeE=document.getElementById('vf-close-e')?.value||'';
   const onboardS=document.getElementById('vf-onboard-s')?.value||'';
   const onboardE=document.getElementById('vf-onboard-e')?.value||'';
   const filtered=S.vacancies.filter(v=>{
-    if(cm&&v.cm!==cm)return false;
+    if(dept&&v.dept!==dept)return false;
     if(func&&v.func!==func)return false;
+    if(channel&&v.channel!==channel)return false;
     if(src&&v.src!==src)return false;
     if(closeS&&v.close_day&&v.close_day<closeS)return false;
     if(closeE&&v.close_day&&v.close_day>closeE)return false;
@@ -1143,8 +1147,9 @@ function renderVacancy(){
   const countEl=document.getElementById('vac-filter-count');
   if(countEl){
     const active=[];
-    if(cm)active.push('獵才='+cm);
+    if(dept)active.push('部門='+dept);
     if(func)active.push('職能='+func);
+    if(channel)active.push('管道='+channel);
     if(src)active.push('來源='+src);
     if(closeS||closeE)active.push(`Close ${closeS||'—'}~${closeE||'—'}`);
     if(onboardS||onboardE)active.push(`報到 ${onboardS||'—'}~${onboardE||'—'}`);
@@ -1154,20 +1159,20 @@ function renderVacancy(){
       countEl.innerHTML=`<span style="font-size:11px;color:var(--muted)">共 ${S.vacancies.length} 筆</span>`;
     }
   }
-  document.getElementById('vac-body').innerHTML=filtered.map((v,vi)=>{
-    const realIdx=S.vacancies.indexOf(v);
+  document.getElementById('vac-body').innerHTML=filtered.map(v=>{
     return `<tr>
+    <td style="font-size:11px;color:var(--muted)">${esc(v.dept||'—')}</td>
     <td style="font-size:12px">${esc(v.func||'—')}</td>
     <td><span class="bdg ba">${esc(v.level||'—')}</span></td>
+    <td style="font-size:11px">${esc(v.grade||'—')}</td>
     <td style="font-size:11px;color:var(--muted)">${esc(v.biz||'—')}</td>
     <td style="font-size:11px;color:var(--muted)">${esc(v.close_day||'—')}</td>
     <td style="font-size:11px;color:var(--muted)">${esc(v.onboard_day||'—')}</td>
     <td style="font-size:12px">${esc(v.reporter||'—')}</td>
+    <td style="font-size:11px">${esc(v.channel||'—')}</td>
     <td><span class="bdg bg2">${esc(v.src||'—')}</span></td>
-    <td><input class="ic" value="${esc(v.cm||'')}" onchange="S.vacancies[${realIdx}].cm=this.value" style="width:60px;font-size:11px" placeholder="獵才"></td>
     <td><span class="bdg ${VST[v.status]||'bg2'}">${esc(v.status||'—')}</span></td>
-    <td><button onclick="saveVac(${realIdx})" title="儲存此列" class="btn bts" style="padding:3px 8px;font-size:11px;color:var(--p)">↑</button></td>
-  </tr>`;}).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">尚無符合條件的資料</td></tr>';
+  </tr>`;}).join('')||'<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px">尚無符合條件的資料</td></tr>';
 }
 async function saveVac(vi){
   if(S.demo){showToast('Demo 模式');return;}
@@ -1183,17 +1188,23 @@ async function saveVac(vi){
 }
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-    <div><div class="ml">人選姓名</div><input class="ic" id="nv-name" placeholder="王小明"></div>
-    <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="Engineering"></div>
-    <div><div class="ml">職級</div><input class="ic" id="nv-level" placeholder="Senior / Mid / Junior"></div>
-    <div><div class="ml">事業</div><input class="ic" id="nv-biz" placeholder="技術事業群"></div>
-    <div><div class="ml">來源</div><input class="ic" id="nv-src" placeholder="LinkedIn / 內推 / 獵頭"></div>
-    <div><div class="ml">獵才</div><select class="ic" id="nv-cm">${S.members.map(m=>`<option>${m.name}</option>`).join('')}</select></div>
+    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部門','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
+    <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
+    <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
+    <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
+    <div><div class="ml">事業</div><input class="ic" id="nv-biz" placeholder="消費事業"></div>
+    <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
+    <div><div class="ml">close day</div><input type="date" class="ic" id="nv-close"></div>
+    <div><div class="ml">報到日</div><input type="date" class="ic" id="nv-onboard"></div>
+    <div><div class="ml">報到人員</div><input class="ic" id="nv-reporter" placeholder="王小明"></div>
+    <div><div class="ml">管道</div><input class="ic" id="nv-channel" placeholder="獵頭 / 內推 / 主動應徵"></div>
+    <div><div class="ml">來源</div><input class="ic" id="nv-src" placeholder="LinkedIn / 104 / 員工推薦"></div>
+    <div><div class="ml">Status</div><select class="ic" id="nv-status">${['錄取','補缺','內轉補缺'].map(s=>`<option>${s}</option>`).join('')}</select></div>
   </div>
-  <div style="margin-bottom:14px"><div class="ml">狀態</div><select class="ic" id="nv-status">${['Sourcing','初篩','面試中','Offer 談判','JD 準備'].map(s=>`<option>${s}</option>`).join('')}</select></div>
   <button class="btn btp" style="width:100%" onclick="confirmAddVac()">確認新增</button>`);}
 async function confirmAddVac(){
-  const v={vac_id:'V'+Date.now(),name:document.getElementById('nv-name').value||'—',func:document.getElementById('nv-func').value||'—',level:document.getElementById('nv-level').value||'—',biz:document.getElementById('nv-biz').value||'—',src:document.getElementById('nv-src').value||'—',cm:document.getElementById('nv-cm').value,status:document.getElementById('nv-status').value};
+  const val=id=>document.getElementById(id)?.value||'';
+  const v={vac_id:'V'+Date.now(),dept:val('nv-dept'),func:val('nv-func')||'—',level:val('nv-level'),grade:val('nv-grade'),biz:val('nv-biz'),title:val('nv-title'),close_day:val('nv-close'),onboard_day:val('nv-onboard'),reporter:val('nv-reporter'),channel:val('nv-channel'),src:val('nv-src'),status:val('nv-status'),_source:'manual'};
   S.vacancies.push(v);closeMdl(null);renderVacancy();
   if(!S.demo){await apiPost({action:'upsertVac',data:v});showToast('關缺已新增');}
 }
@@ -1338,16 +1349,18 @@ function openDashDetail(type){
 }
 function renderVacancy(){
   populateVacFilters();
-  const cm=document.getElementById('vf-cm')?.value||'';
+  const dept=document.getElementById('vf-dept')?.value||'';
   const fn=document.getElementById('vf-func')?.value||'';
+  const channel=document.getElementById('vf-channel')?.value||'';
   const src=document.getElementById('vf-src')?.value||'';
   const csS=document.getElementById('vf-close-s')?.value||'';
   const csE=document.getElementById('vf-close-e')?.value||'';
   const obS=document.getElementById('vf-onboard-s')?.value||'';
   const obE=document.getElementById('vf-onboard-e')?.value||'';
   const filtered=S.vacancies.filter(v=>{
-    if(cm&&v.cm!==cm)return false;
+    if(dept&&v.dept!==dept)return false;
     if(fn&&v.func!==fn)return false;
+    if(channel&&v.channel!==channel)return false;
     if(src&&v.src!==src)return false;
     if(csS&&v.close_day&&v.close_day<csS)return false;
     if(csE&&v.close_day&&v.close_day>csE)return false;
@@ -1365,8 +1378,9 @@ function renderVacancy(){
   const cnt=document.getElementById('vac-filter-count');
   if(cnt){
     const active=[];
-    if(cm)active.push('獵才='+cm);
+    if(dept)active.push('部門='+dept);
     if(fn)active.push('職能='+fn);
+    if(channel)active.push('管道='+channel);
     if(src)active.push('來源='+src);
     if(csS||csE)active.push(`Close ${csS||'—'}~${csE||'—'}`);
     if(obS||obE)active.push(`報到 ${obS||'—'}~${obE||'—'}`);
@@ -1379,50 +1393,52 @@ function renderVacancy(){
   const tbody=document.getElementById('vac-body');if(!tbody)return;
   tbody.innerHTML=filtered.map(v=>{
     const ri=S.vacancies.indexOf(v);
+    const act=v._source!=='external'
+      ? `<button onclick="openEditVac(${ri})" title="編輯" style="background:none;border:.5px solid var(--bdr);border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--p);font-size:11px">✏️</button>`
+      : `<span style="font-size:9px;color:var(--muted)" title="來自缺額表，唯讀">🔗 同步</span>`;
     return`<tr>
+      <td style="font-size:11px;color:var(--muted)">${esc(v.dept||'—')}</td>
       <td style="font-size:12px">${esc(v.func||'—')}</td>
-      <td style="font-size:12px">${esc(v.level||'—')}</td>
+      <td><span class="bdg ba">${esc(v.level||'—')}</span></td>
+      <td style="font-size:11px">${esc(v.grade||'—')}</td>
       <td style="font-size:11px;color:var(--muted)">${esc(v.biz||'—')}</td>
-      <td><input type="date" class="ic" value="${esc(v.close_day||'')}" onchange="S.vacancies[${ri}].close_day=this.value" style="width:96px;font-size:11px"></td>
-      <td><input type="date" class="ic" value="${esc(v.onboard_day||'')}" onchange="S.vacancies[${ri}].onboard_day=this.value" style="width:96px;font-size:11px"></td>
-      <td style="font-size:11px">${esc(v.reporter||'—')}</td>
-      <td><input class="ic" value="${esc(v.src||'')}" onchange="S.vacancies[${ri}].src=this.value" style="width:68px;font-size:11px" placeholder="來源"></td>
-      <td><input class="ic" value="${esc(v.cm||'')}" onchange="S.vacancies[${ri}].cm=this.value" list="cmdl${ri}" style="width:88px;font-size:11px" placeholder="選擇或輸入"><datalist id="cmdl${ri}">${S.members.map(m=>`<option value="${m.name}">`).join('')}<option value="主投"><option value="主管"><option value="內推"><option value="其他"></datalist></td>
-      <td><input class="ic" value="${esc(v.status||'')}" onchange="S.vacancies[${ri}].status=this.value" style="width:76px;font-size:11px" placeholder="狀態"></td>
-      <td style="white-space:nowrap">${v._source!=='external'?`<button onclick="openEditVac(${ri})" title="編輯" style="background:none;border:.5px solid var(--bdr);border-radius:6px;padding:3px 7px;cursor:pointer;color:var(--p);font-size:11px;margin-right:4px">✏️</button>`:''}<button onclick="saveOneVac(${ri})" title="儲存" style="background:var(--p);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;color:#fff;font-size:11px;font-weight:500">儲存</button></td>
+      <td style="font-size:11px;color:var(--muted)">${esc(v.close_day||'—')}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(v.onboard_day||'—')}</td>
+      <td style="font-size:12px">${esc(v.reporter||'—')}</td>
+      <td style="font-size:11px">${esc(v.channel||'—')}</td>
+      <td><span class="bdg bg2">${esc(v.src||'—')}</span></td>
+      <td><span class="bdg ${VST[v.status]||'bg2'}">${esc(v.status||'—')}</span></td>
+      <td style="white-space:nowrap">${act}</td>
     </tr>`;
-  }).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px">尚無資料</td></tr>';
+  }).join('')||'<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:20px">尚無資料</td></tr>';
 }
 function openEditVac(vi){
   const v=S.vacancies[vi];
   openMdl('編輯關缺',`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div><div class="ml">部門</div><select class="ic" id="ev-dept">${['AI技術應用組','工程部','行銷運營部門','業務部'].map(d=>`<option ${v.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div><div class="ml">職能</div><input class="ic" id="ev-func" value="${esc(v.func||'')}"></div>
       <div><div class="ml">職等</div><input class="ic" id="ev-level" value="${esc(v.level||'')}"></div>
+      <div><div class="ml">職級</div><input class="ic" id="ev-grade" value="${esc(v.grade||'')}"></div>
       <div><div class="ml">事業</div><input class="ic" id="ev-biz" value="${esc(v.biz||'')}"></div>
-      <div><div class="ml">報到人員</div><input class="ic" id="ev-reporter" value="${esc(v.reporter||'')}"></div>
-      <div><div class="ml">Close Day</div><input type="date" class="ic" id="ev-close" value="${esc(v.close_day||'')}"></div>
+      <div><div class="ml">中文職稱</div><input class="ic" id="ev-title" value="${esc(v.title||'')}"></div>
+      <div><div class="ml">close day</div><input type="date" class="ic" id="ev-close" value="${esc(v.close_day||'')}"></div>
       <div><div class="ml">報到日</div><input type="date" class="ic" id="ev-onboard" value="${esc(v.onboard_day||'')}"></div>
-      <div><div class="ml">來源</div><input class="ic" id="ev-src" value="${esc(v.src||'')}" placeholder="LinkedIn / 內推 / 獵頭"></div>
-      <div><div class="ml">獵才</div><input class="ic" id="ev-cm" value="${esc(v.cm||'')}" list="ev-cmdl" placeholder="選擇或輸入"><datalist id="ev-cmdl">${S.members.map(m=>`<option value="${m.name}">`).join('')}<option value="主投"><option value="主管"><option value="內推"><option value="其他"></datalist></div>
+      <div><div class="ml">報到人員</div><input class="ic" id="ev-reporter" value="${esc(v.reporter||'')}"></div>
+      <div><div class="ml">管道</div><input class="ic" id="ev-channel" value="${esc(v.channel||'')}" placeholder="獵頭 / 內推 / 主動應徵"></div>
+      <div><div class="ml">來源</div><input class="ic" id="ev-src" value="${esc(v.src||'')}" placeholder="LinkedIn / 104 / 員工推薦"></div>
+      <div><div class="ml">Status</div><select class="ic" id="ev-status">${['錄取','補缺','內轉補缺'].map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>
-    <div style="margin-bottom:14px"><div class="ml">狀態</div><input class="ic" id="ev-status" value="${esc(v.status||'')}" style="width:100%" placeholder="Sourcing / 面試中…"></div>
     <div style="display:flex;justify-content:space-between">
       <button class="btn" style="color:var(--c);border-color:var(--c)" onclick="deleteVacRow(${vi})">🗑 刪除</button>
       <button class="btn btp" onclick="saveEditVac(${vi})">↑ 儲存</button>
     </div>`);
 }
 async function saveEditVac(vi){
-  const v=S.vacancies[vi];
-  v.func=document.getElementById('ev-func').value||'';
-  v.level=document.getElementById('ev-level').value||'';
-  v.biz=document.getElementById('ev-biz').value||'';
-  v.reporter=document.getElementById('ev-reporter').value||'';
-  v.close_day=document.getElementById('ev-close').value||'';
-  v.onboard_day=document.getElementById('ev-onboard').value||'';
-  v.src=document.getElementById('ev-src').value||'';
-  v.cm=document.getElementById('ev-cm').value||'';
-  v.status=document.getElementById('ev-status').value||'';
+  const v=S.vacancies[vi];const g=id=>document.getElementById(id)?.value||'';
+  v.dept=g('ev-dept');v.func=g('ev-func');v.level=g('ev-level');v.grade=g('ev-grade');
+  v.biz=g('ev-biz');v.title=g('ev-title');v.close_day=g('ev-close');v.onboard_day=g('ev-onboard');
+  v.reporter=g('ev-reporter');v.channel=g('ev-channel');v.src=g('ev-src');v.status=g('ev-status');
   closeMdl(null);renderVacancy();
   if(S.demo){showToast('Demo 模式');return;}
   const r=await apiPost({action:'upsertVac',data:v});
@@ -1439,7 +1455,7 @@ async function deleteVacRow(vi){
   S.vacancies.splice(vi,1);
   closeMdl(null);renderVacancy();showToast('已刪除');
 }
-function clearVacF(){['vf-cm','vf-func','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderVacancy();}
+function clearVacF(){['vf-dept','vf-func','vf-channel','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderVacancy();}
 async function saveOneVac(vi){
   if(S.demo){showToast('Demo 模式');return;}
   const v=S.vacancies[vi];
@@ -1456,25 +1472,28 @@ async function saveOneVac(vi){
 }
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-    <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="Engineering"></div>
-    <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="Senior / Mid / Junior"></div>
-    <div><div class="ml">事業</div><input class="ic" id="nv-biz" placeholder="技術事業群"></div>
-    <div><div class="ml">報到人員</div><input class="ic" id="nv-reporter" placeholder="報到負責人"></div>
-    <div><div class="ml">Close Day</div><input type="date" class="ic" id="nv-close"></div>
+    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部門','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
+    <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
+    <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
+    <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
+    <div><div class="ml">事業</div><input class="ic" id="nv-biz" placeholder="消費事業"></div>
+    <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
+    <div><div class="ml">close day</div><input type="date" class="ic" id="nv-close"></div>
     <div><div class="ml">報到日</div><input type="date" class="ic" id="nv-onboard"></div>
-    <div><div class="ml">來源（手動）</div><input class="ic" id="nv-src" placeholder="LinkedIn / 內推 / 獵頭"></div>
-    <div><div class="ml">獵才</div><input class="ic" id="nv-cm" list="nv-cmdl" placeholder="選擇或輸入"><datalist id="nv-cmdl">${S.members.map(m=>`<option value="${m.name}">`).join('')}<option value="主投"><option value="主管"><option value="內推"><option value="其他"></datalist></div>
+    <div><div class="ml">報到人員</div><input class="ic" id="nv-reporter" placeholder="王小明"></div>
+    <div><div class="ml">管道</div><input class="ic" id="nv-channel" placeholder="獵頭 / 內推 / 主動應徵"></div>
+    <div><div class="ml">來源</div><input class="ic" id="nv-src" placeholder="LinkedIn / 104 / 員工推薦"></div>
+    <div><div class="ml">Status</div><select class="ic" id="nv-status">${['錄取','補缺','內轉補缺'].map(s=>`<option>${s}</option>`).join('')}</select></div>
   </div>
-  <div style="margin-bottom:12px"><div class="ml">狀態</div><input class="ic" id="nv-status" placeholder="Sourcing / 面試中…" style="width:100%"></div>
   <button class="btn btp" style="width:100%" onclick="confirmAddVac()">確認新增</button>`);}
 async function confirmAddVac(){
   const g=id=>(document.getElementById(id)?.value||'').trim();
   const v={
     vac_id:'V'+Date.now(),
-    func:g('nv-func'),level:g('nv-level'),biz:g('nv-biz'),
-    reporter:g('nv-reporter'),
-    close_day:g('nv-close'),onboard_day:g('nv-onboard'),
-    src:g('nv-src'),cm:g('nv-cm'),status:g('nv-status'),
+    dept:g('nv-dept'),func:g('nv-func'),level:g('nv-level'),grade:g('nv-grade'),
+    biz:g('nv-biz'),title:g('nv-title'),
+    close_day:g('nv-close'),onboard_day:g('nv-onboard'),reporter:g('nv-reporter'),
+    channel:g('nv-channel'),src:g('nv-src'),status:g('nv-status'),
     _source:'manual',
   };
   S.vacancies.push(v);closeMdl(null);renderVacancy();
