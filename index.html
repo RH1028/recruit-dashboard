@@ -1225,13 +1225,13 @@ function openAddVac(){openMdl('新增關缺',`
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
-    <div><div class="ml">事業</div><input class="ic" id="nv-biz" placeholder="消費事業"></div>
+    <div><div class="ml">事業</div><select class="ic" id="nv-biz">${vacFieldOptions('biz','')}</select></div>
     <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
     <div><div class="ml">close day</div><input type="date" class="ic" id="nv-close"></div>
     <div><div class="ml">報到日</div><input type="date" class="ic" id="nv-onboard"></div>
     <div><div class="ml">報到人員</div><input class="ic" id="nv-reporter" placeholder="王小明"></div>
-    <div><div class="ml">管道</div><input class="ic" id="nv-channel" placeholder="獵頭 / 內推 / 主動應徵"></div>
-    <div><div class="ml">來源</div><input class="ic" id="nv-src" placeholder="LinkedIn / 104 / 員工推薦"></div>
+    <div><div class="ml">管道</div><select class="ic" id="nv-channel">${vacFieldOptions('channel','')}</select></div>
+    <div><div class="ml">來源</div><select class="ic" id="nv-src">${vacFieldOptions('src','')}</select></div>
     <div><div class="ml">Status</div><select class="ic" id="nv-status">${['錄取','補缺','內轉補缺'].map(s=>`<option>${s}</option>`).join('')}</select></div>
   </div>
   <button class="btn btp" style="width:100%" onclick="confirmAddVac()">確認新增</button>`);}
@@ -1369,6 +1369,12 @@ function toggleMsel(key,ev){if(ev)ev.stopPropagation();mselOpen=mselOpen===key?n
 function toggleMselVal(key,val,checked){if(checked)vacSel[key].add(val);else vacSel[key].delete(val);renderVacancy();}
 function clearMsel(key){vacSel[key].clear();renderVacancy();}
 document.addEventListener('click',e=>{if(mselOpen&&!e.target.closest('.msel')){mselOpen=null;renderVacMultiFilters();}});
+// 關缺表單下拉選項：資料中既有值 ∪ 常用預設（去重排序）
+function vacFieldOptions(field,selected){
+  const defaults={channel:['獵頭','內推','主動應徵'],src:['LinkedIn','104','員工推薦','CakeResume','官網','其他'],biz:[]};
+  const vals=[...new Set([...(defaults[field]||[]),...S.vacancies.map(v=>v[field]).filter(Boolean)])].sort();
+  return '<option value="">—</option>'+vals.map(v=>`<option ${v===selected?'selected':''}>${esc(v)}</option>`).join('');
+}
 function switchVTab(tab){
   document.getElementById('vac-list-section').style.display=tab==='list'?'block':'none';
   document.getElementById('vac-pipe-section').style.display=tab==='pipe'?'block':'none';
@@ -1472,13 +1478,13 @@ function openEditVac(vi){
       <div><div class="ml">職能</div><input class="ic" id="ev-func" value="${esc(v.func||'')}"></div>
       <div><div class="ml">職等</div><input class="ic" id="ev-level" value="${esc(v.level||'')}"></div>
       <div><div class="ml">職級</div><input class="ic" id="ev-grade" value="${esc(v.grade||'')}"></div>
-      <div><div class="ml">事業</div><input class="ic" id="ev-biz" value="${esc(v.biz||'')}"></div>
+      <div><div class="ml">事業</div><select class="ic" id="ev-biz">${vacFieldOptions('biz',v.biz||'')}</select></div>
       <div><div class="ml">中文職稱</div><input class="ic" id="ev-title" value="${esc(v.title||'')}"></div>
       <div><div class="ml">close day</div><input type="date" class="ic" id="ev-close" value="${esc(v.close_day||'')}"></div>
       <div><div class="ml">報到日</div><input type="date" class="ic" id="ev-onboard" value="${esc(v.onboard_day||'')}"></div>
       <div><div class="ml">報到人員</div><input class="ic" id="ev-reporter" value="${esc(v.reporter||'')}"></div>
-      <div><div class="ml">管道</div><input class="ic" id="ev-channel" value="${esc(v.channel||'')}" placeholder="獵頭 / 內推 / 主動應徵"></div>
-      <div><div class="ml">來源</div><input class="ic" id="ev-src" value="${esc(v.src||'')}" placeholder="LinkedIn / 104 / 員工推薦"></div>
+      <div><div class="ml">管道</div><select class="ic" id="ev-channel">${vacFieldOptions('channel',v.channel||'')}</select></div>
+      <div><div class="ml">來源</div><select class="ic" id="ev-src">${vacFieldOptions('src',v.src||'')}</select></div>
       <div><div class="ml">Status</div><select class="ic" id="ev-status">${['錄取','補缺','內轉補缺'].map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>
     <div style="display:flex;justify-content:space-between">
@@ -1528,13 +1534,13 @@ function openAddVac(){openMdl('新增關缺',`
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
-    <div><div class="ml">事業</div><input class="ic" id="nv-biz" placeholder="消費事業"></div>
+    <div><div class="ml">事業</div><select class="ic" id="nv-biz">${vacFieldOptions('biz','')}</select></div>
     <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
     <div><div class="ml">close day</div><input type="date" class="ic" id="nv-close"></div>
     <div><div class="ml">報到日</div><input type="date" class="ic" id="nv-onboard"></div>
     <div><div class="ml">報到人員</div><input class="ic" id="nv-reporter" placeholder="王小明"></div>
-    <div><div class="ml">管道</div><input class="ic" id="nv-channel" placeholder="獵頭 / 內推 / 主動應徵"></div>
-    <div><div class="ml">來源</div><input class="ic" id="nv-src" placeholder="LinkedIn / 104 / 員工推薦"></div>
+    <div><div class="ml">管道</div><select class="ic" id="nv-channel">${vacFieldOptions('channel','')}</select></div>
+    <div><div class="ml">來源</div><select class="ic" id="nv-src">${vacFieldOptions('src','')}</select></div>
     <div><div class="ml">Status</div><select class="ic" id="nv-status">${['錄取','補缺','內轉補缺'].map(s=>`<option>${s}</option>`).join('')}</select></div>
   </div>
   <button class="btn btp" style="width:100%" onclick="confirmAddVac()">確認新增</button>`);}
