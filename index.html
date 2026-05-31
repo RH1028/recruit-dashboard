@@ -321,20 +321,18 @@ tr:last-child td{border-bottom:none}
         </div>
         <!-- 已關缺名單 -->
         <div id="vac-list-section">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px 14px;background:var(--bg);border-radius:var(--rs)">
-            <span style="font-size:11px;color:var(--muted);align-self:flex-end;padding-bottom:3px">篩選：</span>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">部門</div><div class="msel" id="ms-dept"></div></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職能</div><div class="msel" id="ms-func"></div></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職等</div><div class="msel" id="ms-level"></div></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">管道</div><div class="msel" id="ms-channel"></div></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">來源</div><div class="msel" id="ms-src"></div></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（起）</div><input type="date" class="ic" id="vf-close-s" onchange="renderVacancy()" style="width:122px"></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（迄）</div><input type="date" class="ic" id="vf-close-e" onchange="renderVacancy()" style="width:122px"></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">報到日（起）</div><input type="date" class="ic" id="vf-onboard-s" onchange="renderVacancy()" style="width:122px"></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">報到日（迄）</div><input type="date" class="ic" id="vf-onboard-e" onchange="renderVacancy()" style="width:122px"></div>
-            <button class="btn bts" onclick="clearVacF()" style="font-size:10px;color:var(--muted);align-self:flex-end">清除篩選</button>
-            <span id="vac-filter-count" style="font-size:11px;color:var(--muted);align-self:flex-end"></span>
+          <div style="display:flex;gap:8px;flex-wrap:nowrap;align-items:flex-end;margin-bottom:6px;padding:10px 14px;background:var(--bg);border-radius:var(--rs);overflow-x:visible">
+            <span style="font-size:11px;color:var(--muted);align-self:flex-end;padding-bottom:3px;flex-shrink:0">篩選：</span>
+            <div style="flex-shrink:0"><div style="font-size:9px;color:var(--muted);margin-bottom:3px">部門</div><div class="msel" id="ms-dept"></div></div>
+            <div style="flex-shrink:0"><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職能</div><div class="msel" id="ms-func"></div></div>
+            <div style="flex-shrink:0"><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職等</div><div class="msel" id="ms-level"></div></div>
+            <div style="flex-shrink:0"><div style="font-size:9px;color:var(--muted);margin-bottom:3px">管道</div><div class="msel" id="ms-channel"></div></div>
+            <div style="flex-shrink:0"><div style="font-size:9px;color:var(--muted);margin-bottom:3px">來源</div><div class="msel" id="ms-src"></div></div>
+            <div style="flex-shrink:0"><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（起→迄）</div><div style="display:flex;gap:4px;align-items:center"><input type="date" class="ic" id="vf-close-s" onchange="renderVacancy()" style="width:114px"><span style="font-size:10px;color:var(--muted)">→</span><input type="date" class="ic" id="vf-close-e" onchange="renderVacancy()" style="width:114px"></div></div>
+            <div style="flex-shrink:0"><div style="font-size:9px;color:var(--muted);margin-bottom:3px">報到日（起→迄）</div><div style="display:flex;gap:4px;align-items:center"><input type="date" class="ic" id="vf-onboard-s" onchange="renderVacancy()" style="width:114px"><span style="font-size:10px;color:var(--muted)">→</span><input type="date" class="ic" id="vf-onboard-e" onchange="renderVacancy()" style="width:114px"></div></div>
+            <button class="btn bts" onclick="clearVacF()" style="font-size:10px;color:var(--muted);align-self:flex-end;flex-shrink:0">清除篩選</button>
           </div>
+          <div id="vac-filter-count" style="font-size:11px;color:var(--muted);margin-bottom:12px;padding:0 14px"></div>
           <div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto">
             <table>
               <thead><tr>
@@ -452,6 +450,7 @@ function getDemoLinks(){return[
 window.addEventListener('load',async()=>{
   S.tasks=getDemoTasks();S.vacancies=getDemoVac();// S.pipeline starts empty - add via + 新增候選人
   S.links=getDemoLinks();
+  initYearToCurrent(); // 開頁預設年度＝今年
   if(isLive()){
     try{
       const d=await apiGet({action:'getAll'});
@@ -534,6 +533,17 @@ async function saveOKR(type){
   await loadData();
 }
 
+// 每次開頁時把 Team OKR / Member Blueprint 的年度選單設成「今年」（缺選項就補上）
+function initYearToCurrent(){
+  const y=String(new Date().getFullYear());
+  ['okr-year','mbp-year'].forEach(id=>{
+    const sel=document.getElementById(id);if(!sel)return;
+    if(![...sel.options].some(o=>o.value===y)){
+      const o=document.createElement('option');o.value=y;o.text=y;sel.appendChild(o);
+    }
+    sel.value=y;
+  });
+}
 function renderAll(){renderOKR();renderMbpMemberChips();renderMbpOKR();renderTaskMemberChips();renderTasks();renderPerfChips();renderPerf();renderDash();renderVacancy();populateVacFilters();renderPipeline();renderLinks();}
 function renderTaskMemberChips(){
   const el=document.getElementById('task-member-chips');if(!el)return;
