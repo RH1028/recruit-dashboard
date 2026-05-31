@@ -75,6 +75,14 @@ tr:last-child td{border-bottom:none}
 .mchips{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
 .mchip{padding:5px 14px;border-radius:100px;font-size:12px;font-weight:500;border:.5px solid var(--bdr);cursor:pointer;background:none;color:var(--muted)}
 .mchip.on{background:var(--p);color:#fff;border-color:var(--p)}
+.msel{position:relative;display:inline-block}
+.msel-btn{font-size:11px;padding:4px 8px;border:.5px solid var(--bdr);border-radius:4px;background:var(--bg);color:var(--text);cursor:pointer;min-width:84px;text-align:left;white-space:nowrap;font-family:inherit}
+.msel-btn.on{border-color:var(--p);color:var(--pd);background:var(--pl)}
+.msel-panel{position:absolute;z-index:60;top:calc(100% + 2px);left:0;background:#fff;border:.5px solid var(--bdr);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:150px;max-height:260px;overflow:auto;padding:4px}
+.msel-opt{display:flex;align-items:center;gap:6px;padding:5px 8px;font-size:12px;cursor:pointer;border-radius:4px;white-space:nowrap}
+.msel-opt:hover{background:var(--bg)}
+.msel-opt input{cursor:pointer;margin:0}
+.msel-clear{padding:6px 8px;font-size:11px;color:var(--p);cursor:pointer;border-top:.5px solid var(--bdr);margin-top:2px;text-align:center}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:580px){.two{grid-template-columns:1fr}}
 .cbr{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:11px}
@@ -315,10 +323,11 @@ tr:last-child td{border-bottom:none}
         <div id="vac-list-section">
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;padding:10px 14px;background:var(--bg);border-radius:var(--rs)">
             <span style="font-size:11px;color:var(--muted);align-self:flex-end;padding-bottom:3px">篩選：</span>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">部門</div><select class="ic" id="vf-dept" onchange="renderVacancy()" style="width:100px"><option value="">全部</option></select></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職能</div><select class="ic" id="vf-func" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">管道</div><select class="ic" id="vf-channel" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
-            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">來源</div><select class="ic" id="vf-src" onchange="renderVacancy()" style="width:88px"><option value="">全部</option></select></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">部門</div><div class="msel" id="ms-dept"></div></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職能</div><div class="msel" id="ms-func"></div></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">職等</div><div class="msel" id="ms-level"></div></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">管道</div><div class="msel" id="ms-channel"></div></div>
+            <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">來源</div><div class="msel" id="ms-src"></div></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（起）</div><input type="date" class="ic" id="vf-close-s" onchange="renderVacancy()" style="width:122px"></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">Close Day（迄）</div><input type="date" class="ic" id="vf-close-e" onchange="renderVacancy()" style="width:122px"></div>
             <div><div style="font-size:9px;color:var(--muted);margin-bottom:3px">報到日（起）</div><input type="date" class="ic" id="vf-onboard-s" onchange="renderVacancy()" style="width:122px"></div>
@@ -381,6 +390,9 @@ let activePerf=0,activeMbpMember=0,okrLocal={},mbpLocal={},pendingTasks={};
 let dashViewMode='team',dashMbrIdx=0;
 let activeTaskMember=null; // null = 全部
 const newTaskIds=new Set(); // 本次 session 新增的任務 id，永遠排在表格最下方
+// 關缺篩選（複選）：每個欄位存一組已勾選的值
+const vacSel={dept:new Set(),func:new Set(),level:new Set(),channel:new Set(),src:new Set()};
+let mselOpen=null; // 目前展開的複選下拉 key
 
 // ══ CONSTANTS ══
 const PROMOTE_THRESHOLD=80;
@@ -1316,6 +1328,26 @@ async function confirmAddLink(){
 
 // ══ MODAL / CFG / TOAST ══
 
+// ══ 關缺篩選：複選下拉（勾選清單）══
+const VAC_MSEL_FIELDS=[{key:'dept',label:'部門'},{key:'func',label:'職能'},{key:'level',label:'職等'},{key:'channel',label:'管道'},{key:'src',label:'來源'}];
+function renderVacMultiFilters(){
+  VAC_MSEL_FIELDS.forEach(f=>{
+    const host=document.getElementById('ms-'+f.key);if(!host)return;
+    const vals=[...new Set(S.vacancies.map(v=>v[f.key]).filter(Boolean))].sort();
+    const sel=vacSel[f.key];
+    [...sel].forEach(v=>{if(!vals.includes(v))sel.delete(v);}); // 清掉已不存在的選項
+    const cnt=sel.size,open=mselOpen===f.key;
+    const opts=vals.length
+      ? vals.map(v=>`<label class="msel-opt"><input type="checkbox" value="${esc(v)}" ${sel.has(v)?'checked':''} onchange="toggleMselVal('${f.key}',this.value,this.checked)">${esc(v)}</label>`).join('')
+      : '<div style="padding:6px 10px;font-size:11px;color:var(--muted)">無資料</div>';
+    host.innerHTML=`<button type="button" class="msel-btn ${cnt?'on':''}" onclick="toggleMsel('${f.key}',event)">${cnt?('已選 '+cnt+' 項'):'全部'} <span style="font-size:8px;opacity:.6">▾</span></button>`
+      +`<div class="msel-panel" style="display:${open?'block':'none'}">${opts}${cnt?`<div class="msel-clear" onclick="clearMsel('${f.key}')">清除此欄</div>`:''}</div>`;
+  });
+}
+function toggleMsel(key,ev){if(ev)ev.stopPropagation();mselOpen=mselOpen===key?null:key;renderVacMultiFilters();}
+function toggleMselVal(key,val,checked){if(checked)vacSel[key].add(val);else vacSel[key].delete(val);renderVacancy();}
+function clearMsel(key){vacSel[key].clear();renderVacancy();}
+document.addEventListener('click',e=>{if(mselOpen&&!e.target.closest('.msel')){mselOpen=null;renderVacMultiFilters();}});
 function switchVTab(tab){
   document.getElementById('vac-list-section').style.display=tab==='list'?'block':'none';
   document.getElementById('vac-pipe-section').style.display=tab==='pipe'?'block':'none';
@@ -1348,20 +1380,18 @@ function openDashDetail(type){
   openMdl(title,`<table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>預估h</th><th>實際h</th><th>備註</th></tr></thead><tbody>${tasks.map(t=>{const h=hp(t),diff=(+t.actual_hours-+t.est_hours).toFixed(1);return`<tr><td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.completion_pct}%</td><td><span class="bdg ${h.cls}">${h.label}</span></td><td style="font-size:11px">${t.est_hours}h</td><td style="font-size:11px;color:${parseFloat(diff)>0?'var(--cd)':'var(--td)'}">${t.actual_hours}h</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>'}</tbody></table>`);
 }
 function renderVacancy(){
-  populateVacFilters();
-  const dept=document.getElementById('vf-dept')?.value||'';
-  const fn=document.getElementById('vf-func')?.value||'';
-  const channel=document.getElementById('vf-channel')?.value||'';
-  const src=document.getElementById('vf-src')?.value||'';
+  renderVacMultiFilters();
+  const sel=vacSel;
   const csS=document.getElementById('vf-close-s')?.value||'';
   const csE=document.getElementById('vf-close-e')?.value||'';
   const obS=document.getElementById('vf-onboard-s')?.value||'';
   const obE=document.getElementById('vf-onboard-e')?.value||'';
   const filtered=S.vacancies.filter(v=>{
-    if(dept&&v.dept!==dept)return false;
-    if(fn&&v.func!==fn)return false;
-    if(channel&&v.channel!==channel)return false;
-    if(src&&v.src!==src)return false;
+    if(sel.dept.size&&!sel.dept.has(v.dept))return false;
+    if(sel.func.size&&!sel.func.has(v.func))return false;
+    if(sel.level.size&&!sel.level.has(v.level))return false;
+    if(sel.channel.size&&!sel.channel.has(v.channel))return false;
+    if(sel.src.size&&!sel.src.has(v.src))return false;
     if(csS&&v.close_day&&v.close_day<csS)return false;
     if(csE&&v.close_day&&v.close_day>csE)return false;
     if(obS&&v.onboard_day&&v.onboard_day<obS)return false;
@@ -1378,10 +1408,11 @@ function renderVacancy(){
   const cnt=document.getElementById('vac-filter-count');
   if(cnt){
     const active=[];
-    if(dept)active.push('部門='+dept);
-    if(fn)active.push('職能='+fn);
-    if(channel)active.push('管道='+channel);
-    if(src)active.push('來源='+src);
+    if(sel.dept.size)active.push('部門:'+[...sel.dept].join('、'));
+    if(sel.func.size)active.push('職能:'+[...sel.func].join('、'));
+    if(sel.level.size)active.push('職等:'+[...sel.level].join('、'));
+    if(sel.channel.size)active.push('管道:'+[...sel.channel].join('、'));
+    if(sel.src.size)active.push('來源:'+[...sel.src].join('、'));
     if(csS||csE)active.push(`Close ${csS||'—'}~${csE||'—'}`);
     if(obS||obE)active.push(`報到 ${obS||'—'}~${obE||'—'}`);
     if(active.length){
@@ -1455,7 +1486,7 @@ async function deleteVacRow(vi){
   S.vacancies.splice(vi,1);
   closeMdl(null);renderVacancy();showToast('已刪除');
 }
-function clearVacF(){['vf-dept','vf-func','vf-channel','vf-src','vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderVacancy();}
+function clearVacF(){Object.values(vacSel).forEach(s=>s.clear());['vf-close-s','vf-close-e','vf-onboard-s','vf-onboard-e'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});mselOpen=null;renderVacancy();}
 async function saveOneVac(vi){
   if(S.demo){showToast('Demo 模式');return;}
   const v=S.vacancies[vi];
