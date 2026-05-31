@@ -155,6 +155,7 @@ tr:last-child td{border-bottom:none}
 .link-card{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:12px 14px;cursor:pointer;transition:border-color .12s}
 .link-card:hover{border-color:var(--p)}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -324,7 +325,7 @@ tr:last-child td{border-bottom:none}
       <div id="tab-vacancy" class="tp">
         <div class="phead">
           <div><div class="ptitle">關缺管理</div><div class="psub">已開缺職位與 Pipeline 人選追蹤</div></div>
-          <div id="vac-add-btns"><button class="btn btp" onclick="openAddVac()">＋ 新增關缺</button></div>
+          <div id="vac-add-btns"><button class="btn bts" onclick="openVacCharts()" style="margin-right:6px">📊 圖表呈現</button><button class="btn btp" onclick="openAddVac()">＋ 新增關缺</button></div>
         </div>
         <div style="display:flex;gap:2px;border-bottom:.5px solid var(--bdr);margin-bottom:16px">
           <button id="vtab-list" style="padding:7px 16px;font-size:12px;font-weight:500;color:var(--pd);background:none;border:none;border-bottom:2px solid var(--p);cursor:pointer" onclick="switchVTab('list')">① 已關缺名單</button>
@@ -375,6 +376,9 @@ tr:last-child td{border-bottom:none}
 <div class="toast" id="toast"></div>
 <div class="overlay" id="modal" onclick="closeMdl(event)">
   <div class="modal"><div class="mhd"><div class="mtitle" id="mtitle"></div><button class="xbtn" onclick="closeMdl(null)">×</button></div><div id="mbody"></div></div>
+</div>
+<div class="overlay" id="chart-modal" onclick="if(event.target===this)closeVacCharts()">
+  <div class="modal" style="width:min(1080px,96vw)"><div class="mhd"><div class="mtitle">📊 關缺圖表呈現</div><button class="xbtn" onclick="closeVacCharts()">×</button></div><div id="chart-body"></div></div>
 </div>
 <div class="overlay" id="cfg-modal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
@@ -1369,6 +1373,60 @@ function toggleMsel(key,ev){if(ev)ev.stopPropagation();mselOpen=mselOpen===key?n
 function toggleMselVal(key,val,checked){if(checked)vacSel[key].add(val);else vacSel[key].delete(val);renderVacancy();}
 function clearMsel(key){vacSel[key].clear();renderVacancy();}
 document.addEventListener('click',e=>{if(mselOpen&&!e.target.closest('.msel')){mselOpen=null;renderVacMultiFilters();}});
+// 依目前篩選條件取得關缺清單（renderVacancy 與圖表共用）
+function getFilteredVacancies(){
+  const sel=vacSel;
+  const csS=document.getElementById('vf-close-s')?.value||'';
+  const csE=document.getElementById('vf-close-e')?.value||'';
+  const obS=document.getElementById('vf-onboard-s')?.value||'';
+  const obE=document.getElementById('vf-onboard-e')?.value||'';
+  return S.vacancies.filter(v=>{
+    if(sel.dept.size&&!sel.dept.has(v.dept))return false;
+    if(sel.func.size&&!sel.func.has(v.func))return false;
+    if(sel.level.size&&!sel.level.has(v.level))return false;
+    if(sel.channel.size&&!sel.channel.has(v.channel))return false;
+    if(sel.src.size&&!sel.src.has(v.src))return false;
+    if(csS&&v.close_day&&v.close_day<csS)return false;
+    if(csE&&v.close_day&&v.close_day>csE)return false;
+    if(obS&&v.onboard_day&&v.onboard_day<obS)return false;
+    if(obE&&v.onboard_day&&v.onboard_day>obE)return false;
+    return true;
+  });
+}
+// ══ 關缺圖表呈現 ══
+let vacCharts=[];
+const CHART_PAL=['#7c6cf0','#22c3a6','#f59e0b','#ef4444','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#64748b'];
+function openVacCharts(){
+  if(typeof Chart==='undefined'){alert('圖表元件尚在載入（需連網），請稍候再試一次。');return;}
+  const data=getFilteredVacancies();
+  const total=data.length,all=S.vacancies.length;
+  const note=total===all?`全部 ${total} 筆`:`篩選後 ${total} / ${all} 筆`;
+  const titles=['各部門關缺數','Status 分布','招募管道分布','來源分布','月趨勢（依 Close Day）'];
+  document.getElementById('chart-body').innerHTML=
+    `<div style="font-size:11px;color:var(--muted);margin-bottom:14px">資料範圍：${note}（圖表反映目前篩選條件）</div>`
+    +`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">`
+    +titles.map((t,i)=>`<div style="background:var(--bg);border:.5px solid var(--bdr);border-radius:10px;padding:12px 14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px">${t}</div>
+        <div style="position:relative;height:240px"><canvas id="vchart${i}"></canvas></div></div>`).join('')
+    +`</div>`;
+  document.getElementById('chart-modal').classList.add('open');
+  vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];
+  if(!total){document.querySelectorAll('#chart-body canvas').forEach(c=>{c.parentNode.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:50px 0">無符合條件的資料</div>';});return;}
+  const countBy=(f)=>{const m={};data.forEach(v=>{const k=(v[f]||'(未填)');m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
+  const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:8}}}};
+  const mk=(i,cfg)=>vacCharts.push(new Chart(document.getElementById('vchart'+i),cfg));
+  // 1 各部門關缺數（長條）
+  {const e=countBy('dept');mk(0,{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#7c6cf0',borderRadius:4}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+  // 2 Status 分布（圓環）
+  {const sc={'錄取':'#22c3a6','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy('status');mk(1,{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>sc[x[0]]||CHART_PAL[i%CHART_PAL.length])}]},options:base});}
+  // 3 招募管道（圓環）
+  {const e=countBy('channel');mk(2,{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>CHART_PAL[i%CHART_PAL.length])}]},options:base});}
+  // 4 來源（橫向長條）
+  {const e=countBy('src');mk(3,{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#22c3a6',borderRadius:4}]},options:{...base,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
+  // 5 月趨勢（折線，依 close_day 的 YYYY-MM）
+  {const m={};data.forEach(v=>{if(v.close_day){const k=String(v.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});const keys=Object.keys(m).sort();mk(4,{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+}
+function closeVacCharts(){document.getElementById('chart-modal').classList.remove('open');vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];}
 // 關缺表單下拉選項：資料中既有值 ∪ 常用預設（去重排序）
 function vacFieldOptions(field,selected){
   const defaults={channel:['獵頭','內推','主動應徵'],src:['LinkedIn','104','員工推薦','CakeResume','官網','其他'],biz:[]};
@@ -1382,7 +1440,7 @@ function switchVTab(tab){
   if(lb){lb.style.color=tab==='list'?'var(--pd)':'var(--muted)';lb.style.borderBottomColor=tab==='list'?'var(--p)':'transparent';}
   if(pb){pb.style.color=tab==='pipe'?'var(--pd)':'var(--muted)';pb.style.borderBottomColor=tab==='pipe'?'var(--p)':'transparent';}
   const ab=document.getElementById('vac-add-btns');
-  if(ab)ab.innerHTML=tab==='list'?'<button class="btn btp" onclick="openAddVac()">＋ 新增關缺</button>':'<button class="btn btp" onclick="openAddPipeline()">＋ 新增候選人</button>';
+  if(ab)ab.innerHTML=tab==='list'?'<button class="btn bts" onclick="openVacCharts()" style="margin-right:6px">📊 圖表呈現</button><button class="btn btp" onclick="openAddVac()">＋ 新增關缺</button>':'<button class="btn btp" onclick="openAddPipeline()">＋ 新增候選人</button>';
 }
 function openDashDetail(type){
   const mName=dashViewMode==='member'?S.members[dashMbrIdx]?.name:null;
@@ -1413,18 +1471,7 @@ function renderVacancy(){
   const csE=document.getElementById('vf-close-e')?.value||'';
   const obS=document.getElementById('vf-onboard-s')?.value||'';
   const obE=document.getElementById('vf-onboard-e')?.value||'';
-  const filtered=S.vacancies.filter(v=>{
-    if(sel.dept.size&&!sel.dept.has(v.dept))return false;
-    if(sel.func.size&&!sel.func.has(v.func))return false;
-    if(sel.level.size&&!sel.level.has(v.level))return false;
-    if(sel.channel.size&&!sel.channel.has(v.channel))return false;
-    if(sel.src.size&&!sel.src.has(v.src))return false;
-    if(csS&&v.close_day&&v.close_day<csS)return false;
-    if(csE&&v.close_day&&v.close_day>csE)return false;
-    if(obS&&v.onboard_day&&v.onboard_day<obS)return false;
-    if(obE&&v.onboard_day&&v.onboard_day>obE)return false;
-    return true;
-  }).sort((a,b)=>{
+  const filtered=getFilteredVacancies().sort((a,b)=>{
     // 依 close_day 由近到遠排序（最新在上）；無 close_day 者排最後
     const ad=a.close_day||'',bd=b.close_day||'';
     if(!ad&&!bd)return 0;
