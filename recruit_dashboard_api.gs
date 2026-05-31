@@ -9,7 +9,7 @@ const SHEET_ID = '1R8TKDQlN3VhG7NP6w9aZtD_qIFkk2b2WCp-yhDAvBos'; // Dashboard DB
 
 // 外部缺額表 Sheet ID（唯讀，讀 4 個部門分頁，篩選 Status）
 const VACANCY_SHEET_ID = '1hGbY4FyRjRMpGb1NVj59D7epk7eas7dW-FL0PVHXXas';
-const VACANCY_TABS     = ['AI技術應用組', '工程部', '行銷運營部門', '業務部']; // 逐分頁讀取再合併
+const VACANCY_TABS     = ['AI技術應用組', '工程部', '行銷運營部', '業務部']; // 逐分頁讀取再合併
 const VACANCY_STATUS   = ['錄取', '補缺', '內轉補缺']; // 只取這些 Status
 
 // ── 允許 CORS，讓前端 Dashboard 可以呼叫 ──

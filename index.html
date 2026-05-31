@@ -412,8 +412,8 @@ function getDemoTasks(){
 ];}
 function getDemoVac(){return[
   // Demo 資料模擬外部缺額表（4 部門分頁，Status ∈ 錄取/補缺/內轉補缺）
-  {vac_id:'EXT-1',dept:'行銷運營部門',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',channel:'獵頭',src:'LinkedIn',status:'錄取',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-2',dept:'行銷運營部門',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'合作夥伴事業群',close_day:'2025-10-09',onboard_day:'2025-10-27',reporter:'王怡方',channel:'內推',src:'員工推薦',status:'補缺',title:'資深行銷運營專員',_source:'external'},
+  {vac_id:'EXT-1',dept:'行銷運營部',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',channel:'獵頭',src:'LinkedIn',status:'錄取',title:'資深行銷運營專員',_source:'external'},
+  {vac_id:'EXT-2',dept:'行銷運營部',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'合作夥伴事業群',close_day:'2025-10-09',onboard_day:'2025-10-27',reporter:'王怡方',channel:'內推',src:'員工推薦',status:'補缺',title:'資深行銷運營專員',_source:'external'},
   {vac_id:'EXT-3',dept:'工程部',func:'後端工程組',level:'P6',grade:'技術主管',biz:'消費事業',close_day:'2026-01-16',onboard_day:'2026-02-23',reporter:'馬筱淳',channel:'主動應徵',src:'104',status:'內轉補缺',title:'後端工程師',_source:'external'},
   {vac_id:'EXT-4',dept:'AI技術應用組',func:'大數據組',level:'P6',grade:'資深工程師',biz:'部門',close_day:'2024-08-12',onboard_day:'2024-09-18',reporter:'彭聿采',channel:'獵頭',src:'CakeResume',status:'錄取',title:'Big Data Engineer',_source:'external'},
   {vac_id:'EXT-5',dept:'業務部',func:'業務開發組',level:'P4',grade:'專員',biz:'部門',close_day:'2024-06-25',onboard_day:'2024-10-01',reporter:'廖偉丞',channel:'主動應徵',src:'LinkedIn',status:'補缺',title:'業務開發專員',_source:'external'},
@@ -1188,7 +1188,7 @@ async function saveVac(vi){
 }
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部門','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
+    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
@@ -1416,7 +1416,7 @@ function openEditVac(vi){
   const v=S.vacancies[vi];
   openMdl('編輯關缺',`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <div><div class="ml">部門</div><select class="ic" id="ev-dept">${['AI技術應用組','工程部','行銷運營部門','業務部'].map(d=>`<option ${v.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
+      <div><div class="ml">部門</div><select class="ic" id="ev-dept">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option ${v.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
       <div><div class="ml">職能</div><input class="ic" id="ev-func" value="${esc(v.func||'')}"></div>
       <div><div class="ml">職等</div><input class="ic" id="ev-level" value="${esc(v.level||'')}"></div>
       <div><div class="ml">職級</div><input class="ic" id="ev-grade" value="${esc(v.grade||'')}"></div>
@@ -1472,7 +1472,7 @@ async function saveOneVac(vi){
 }
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部門','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
+    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
