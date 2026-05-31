@@ -1221,7 +1221,7 @@ async function saveVac(vi){
 }
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
+    <div><div class="ml">部門</div><input class="ic" id="nv-dept" list="nv-dept-dl" placeholder="選擇或自行輸入"><datalist id="nv-dept-dl">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option value="${d}">`).join('')}</datalist></div>
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
@@ -1468,7 +1468,7 @@ function openEditVac(vi){
   const v=S.vacancies[vi];
   openMdl('編輯關缺',`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-      <div><div class="ml">部門</div><select class="ic" id="ev-dept">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option ${v.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
+      <div><div class="ml">部門</div><input class="ic" id="ev-dept" value="${esc(v.dept||'')}" list="ev-dept-dl" placeholder="選擇或自行輸入"><datalist id="ev-dept-dl">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option value="${d}">`).join('')}</datalist></div>
       <div><div class="ml">職能</div><input class="ic" id="ev-func" value="${esc(v.func||'')}"></div>
       <div><div class="ml">職等</div><input class="ic" id="ev-level" value="${esc(v.level||'')}"></div>
       <div><div class="ml">職級</div><input class="ic" id="ev-grade" value="${esc(v.grade||'')}"></div>
@@ -1524,7 +1524,7 @@ async function saveOneVac(vi){
 }
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-    <div><div class="ml">部門</div><select class="ic" id="nv-dept">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option>${d}</option>`).join('')}</select></div>
+    <div><div class="ml">部門</div><input class="ic" id="nv-dept" list="nv-dept-dl" placeholder="選擇或自行輸入"><datalist id="nv-dept-dl">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option value="${d}">`).join('')}</datalist></div>
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
