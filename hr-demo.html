@@ -1,133 +1,173 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HR Head 視角 — 關缺圖表 Demo</title>
+<title>關缺交叉分析 — HR Demo</title>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--p:#7F77DD;--pl:#EEEDFE;--pd:#3C3489;--bg:#F7F6F3;--surf:#fff;--bdr:rgba(0,0,0,.1);--text:#1A1A1A;--muted:#6B6A66;
-  font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;}
-body{background:var(--bg);color:var(--text);padding:26px;font-size:14px;line-height:1.5;max-width:1120px;margin:0 auto}
-h1{font-size:20px;color:var(--pd)}
-.sub{font-size:12px;color:var(--muted);margin:4px 0 20px}
-.divider{font-size:13px;font-weight:600;color:var(--pd);margin:24px 0 12px;padding-left:10px;border-left:3px solid var(--p)}
-.card{background:var(--surf);border:.5px solid var(--bdr);border-radius:12px;padding:16px 18px;margin-bottom:16px}
-.ctitle{font-size:14px;font-weight:600;margin-bottom:2px}
-.cnote{font-size:11px;color:var(--muted);margin-bottom:12px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+:root{
+  --c1:#15436F;--c2:#2E6BA6;--c3:#5B95CC;--c4:#9DC2E6;--gray:#B7B5AC;
+  --bg:#FFFFFF;--bg2:#F5F6F7;--text:#1A1A1A;--text2:#6B6B6B;--text3:#9A9A9A;
+  --border:rgba(0,0,0,0.10);--tick:#8C8C8C;--grid:rgba(128,128,128,0.18);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:32px;background:var(--bg);color:var(--text);font-family:-apple-system,"PingFang TC","Microsoft JhengHei",Arial,sans-serif}
+.page{max-width:920px;margin:0 auto}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+.sub{font-size:13px;color:var(--text2);margin:0 0 24px}
+.block{margin-bottom:30px}
+.title{font-size:14px;font-weight:600;margin:0 0 10px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;font-size:12px;color:var(--text2)}
+.legend span{display:flex;align-items:center;gap:5px}
+.dot{width:11px;height:11px;border-radius:2px}
+.wrap{position:relative;width:100%}
+/* KPI */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
-.kpi{background:var(--bg);border-radius:10px;padding:11px 13px}
-.kpi .l{font-size:11px;color:var(--muted)}.kpi .v{font-size:23px;font-weight:700;margin-top:2px}.kpi .s{font-size:11px;color:var(--muted)}
-.leg{margin-bottom:10px}
-.leg .hint{font-size:10px;color:var(--muted)}
-.chip{cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:100px;border:.5px solid var(--bdr);font-size:11px;color:var(--muted);background:#fff;margin:4px 4px 0 0}
-.chip:hover{border-color:var(--p)}
-.chip.on{border-color:var(--p);color:var(--pd);background:var(--pl);font-weight:600}
-.chip i{width:11px;height:11px;border-radius:3px}
-.chartbox{position:relative}
+.kpi{background:var(--bg2);border-radius:8px;padding:12px 14px}
+.kpi .l{font-size:11px;color:var(--text2)}
+.kpi .v{font-size:24px;font-weight:700;margin-top:2px;color:var(--c1)}
+.kpi .s{font-size:11px;color:var(--text2)}
+/* table */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 10px;text-align:center;border-bottom:1px solid var(--border)}
+thead th{color:var(--text2);font-weight:500;font-size:12px;background:var(--bg2)}
+.grp{text-align:left;font-weight:600}.sub-c{text-align:left;color:var(--text2)}
+td.hit{background:rgba(46,107,166,0.14);font-weight:600}
+td.zero{color:var(--text3)}
+.rt,tfoot td{font-weight:600}tfoot td{background:var(--bg2)}
+.note{font-size:12px;color:var(--text2);margin-top:12px;line-height:1.6}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
 </head>
 <body>
-<h1>📊 關缺圖表 — HR Head 視角</h1>
-<div class="sub">範例資料 120 筆。重點數字 + 量體長條 + 五張相關性圖（100% 堆疊橫條）+ 月趨勢。色塊預設淡灰，<b>點圖例才亮起該段</b>。</div>
+<div class="page">
+  <h1>📊 關缺交叉分析 — HR Demo</h1>
+  <p class="sub">範例資料 36 筆｜單一藍色家族配色（資深越深、未填灰）｜堆疊長條標人數、可四邊對帳</p>
 
-<div class="card">
-  <div class="ctitle">① 重點數字</div>
-  <div class="cnote">量體與結果一眼看完。</div>
-  <div class="kpis" id="kpis"></div>
+  <div class="block">
+    <p class="title">① 重點數字</p>
+    <div class="kpis" id="kpis"></div>
+  </div>
+
+  <div class="block">
+    <p class="title">② 職能 × 管道</p>
+    <div class="legend" id="lg2"></div>
+    <div class="wrap" id="bx2"><canvas id="m2"></canvas></div>
+  </div>
+
+  <div class="block">
+    <p class="title">③ 職能 × 來源</p>
+    <div class="legend" id="lg3"></div>
+    <div class="wrap" id="bx3"><canvas id="m3"></canvas></div>
+  </div>
+
+  <div class="block">
+    <p class="title">④ 職能 × 職等</p>
+    <div class="legend" id="lg4"></div>
+    <div class="wrap" id="bx4"><canvas id="m4"></canvas></div>
+  </div>
+
+  <div class="block">
+    <p class="title">⑤ 職等 × 管道 × 來源（三維交叉表）</p>
+    <div id="xtab"></div>
+    <p class="note">淺藍格＝有人數的組合；每橫列、每直欄加總皆收斂到右下角總計，可四邊對帳。</p>
+  </div>
+
+  <div class="block">
+    <p class="title">⑥ 月趨勢（依 Close Day）</p>
+    <div class="wrap" style="height:220px"><canvas id="trend"></canvas></div>
+  </div>
 </div>
-
-<div class="divider">▼ 量體（絕對數量）</div>
-<div class="grid2">
-  <div class="card"><div class="ctitle">② 各職能關缺數</div><div class="cnote">需求集中在哪些職能</div><div class="chartbox" id="bxFunc"><canvas id="cFunc"></canvas></div></div>
-  <div class="card"><div class="ctitle">③ 各管道關缺數</div><div class="cnote">主要靠哪些管道</div><div class="chartbox" id="bxChan"><canvas id="cChan"></canvas></div></div>
-</div>
-
-<div class="divider">▼ 五張相關性圖（100% 占比；點圖例只看該段）</div>
-<div class="grid2">
-  <div class="card"><div class="ctitle">④ 職能 × 管道</div><div class="cnote">各職能靠哪些管道補人</div><div class="leg" id="lg4"></div><div class="chartbox" id="bx4"><canvas id="c4"></canvas></div></div>
-  <div class="card"><div class="ctitle">⑤ 職能 × 來源</div><div class="cnote">各職能來自哪些來源</div><div class="leg" id="lg5"></div><div class="chartbox" id="bx5"><canvas id="c5"></canvas></div></div>
-  <div class="card"><div class="ctitle">⑥ 職能 × 職等</div><div class="cnote">各職能的職等結構</div><div class="leg" id="lg6"></div><div class="chartbox" id="bx6"><canvas id="c6"></canvas></div></div>
-  <div class="card"><div class="ctitle">⑦ 職等 × 管道</div><div class="cnote">各職等靠哪些管道（資深靠誰？）</div><div class="leg" id="lg7"></div><div class="chartbox" id="bx7"><canvas id="c7"></canvas></div></div>
-</div>
-<div class="card"><div class="ctitle">⑧ 職等 × 來源</div><div class="cnote">各職等來自哪些來源</div><div class="leg" id="lg8"></div><div class="chartbox" id="bx8"><canvas id="c8"></canvas></div></div>
-
-<div class="card"><div class="ctitle">⑨ 月趨勢（依 Close Day）</div><div class="cnote">關缺量隨時間變化</div><div class="chartbox" style="height:230px"><canvas id="trend"></canvas></div></div>
 
 <script>
-const FUNCS={'後端工程':'工程部','前端工程':'工程部','資料科學':'AI技術應用組','產品經理':'產品部','行銷企劃':'行銷運營部','業務開發':'業務部','人資':'人力資源部','UI/UX 設計':'產品部'};
-const FN=Object.keys(FUNCS);
+Chart.register(ChartDataLabels);
+const TICK='#8C8C8C',GRID='rgba(128,128,128,0.18)',DARK='#15436F',LIGHT='#9DC2E6',GRAY='#B7B5AC';
+// 範例資料（管道→職等/來源有相關性，控制組合數讓三維表乾淨）
+const FUNCS=['行銷運營組','商務開發','銷售','PC組','後端工程'];
 const RULES={
- 'LinkedIn':{lv:['3','3','4','4','5'],src:['主投','官網'],st:['錄取','補缺','錄取']},
- '104':{lv:['1','2','2','3','intern'],src:['主投','官網'],st:['補缺','錄取','補缺']},
- '內部推薦':{lv:['2','3','3','4'],src:['員工推薦','同事'],st:['補缺','錄取']},
- '獵頭':{lv:['4','5','5','6'],src:['獵才_Lydia','獵才_Johnny'],st:['錄取','錄取','補缺']},
- '校園招募':{lv:['intern','intern','1'],src:['台灣大學'],st:['錄取','補缺']},
- '內轉':{lv:['2','3','4'],src:['同事'],st:['內轉補缺','內轉補缺']},
+ '104':{lv:['2','3'],src:['主投','主管']},
+ 'LinkedIn':{lv:['4','5'],src:['獵才']},
+ '內部推薦':{lv:['3','4'],src:['員工推薦','主管']},
+ '獵頭':{lv:['5'],src:['獵才']},
 };
-const CH=Object.keys(RULES);
-const MONTHS=['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02','2026-03'];
+const CH=Object.keys(RULES),MONTHS=['2025-10','2025-11','2025-12','2026-01','2026-02','2026-03'];
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const ROWS=[];
-for(let i=0;i<120;i++){const ch=pick(CH),r=RULES[ch],fn=pick(FN);
-  ROWS.push({func:fn,dept:FUNCS[fn],channel:ch,src:pick(r.src),level:pick(r.lv),status:pick(r.st),
+for(let i=0;i<36;i++){const ch=pick(CH),r=RULES[ch];
+  ROWS.push({func:pick(FUNCS),channel:ch,src:pick(r.src),level:pick(r.lv),status:pick(['錄取','錄取','補缺','內轉補缺']),
     close_day:pick(MONTHS)+'-15',days:18+Math.floor(Math.random()*40)});}
 
-const orderLevels=ks=>{const n=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const it=ks.filter(k=>/intern/i.test(k));const o=ks.filter(k=>n.indexOf(k)<0&&it.indexOf(k)<0).sort();return[...n,...o,...it];};
-const lvColor=lv=>{const i=['1','2','3','4','5','6'].indexOf(lv);if(i>=0)return 'hsl(252,68%,'+(78-i*9.6).toFixed(0)+'%)';if(/intern/i.test(lv))return '#0d9488';return '#94a3b8';};
-const PAL=['#7F77DD','#1D9E75','#BA7517','#D85A30','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#64748b'];
-const F={'職能':'func','管道':'channel','來源':'src','職等':'level'};
-const byTotalDesc=(f,ks)=>ks.sort((a,b)=>ROWS.filter(r=>(r[f]||'(未填)')===b).length-ROWS.filter(r=>(r[f]||'(未填)')===a).length);
-const keysOf=dim=>{const f=F[dim];let ks=[...new Set(ROWS.map(r=>r[f]||'(未填)'))];return dim==='職等'?orderLevels(ks):byTotalDesc(f,ks);};
-const colorMap=dim=>{const m={};keysOf(dim).forEach((k,i)=>m[k]=dim==='職等'?lvColor(k):PAL[i%PAL.length]);return m;};
-const countBy=(rows,f)=>{const m={};rows.forEach(v=>{const k=v[f]||'(未填)';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
-const base={responsive:true,maintainAspectRatio:false,animation:false};
-const MUTE='#e3e1ef', MUTE2='#edecf3';   // 淡灰：預設 / 有聚焦時的非聚焦段
+// ── 配色工具：藍色家族 ──
+const hex2rgb=h=>{h=h.replace('#','');return[0,2,4].map(i=>parseInt(h.substr(i,2),16));};
+const rgb2hex=a=>'#'+a.map(x=>Math.round(x).toString(16).padStart(2,'0')).join('');
+const mix=(a,b,t)=>rgb2hex(hex2rgb(a).map((x,i)=>x+(hex2rgb(b)[i]-x)*t));
+const ramp=n=>n<=1?[DARK]:Array.from({length:n},(_,i)=>mix(DARK,LIGHT,i/(n-1)));
+const isLight=h=>{const[r,g,b]=hex2rgb(h);return .299*r+.587*g+.114*b>150;};
+const labelColor=h=>isLight(h)?'#15436F':'#fff';
+const cnt=(f,v)=>ROWS.filter(r=>(r[f]||'未填')===v).length;
+const orderLevels=ks=>{const n=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const it=ks.filter(k=>/intern/i.test(k));const bl=ks.filter(k=>k==='未填');return[...n,...it,...bl];};
+// 一般維度：主力最深→遞淺，未填灰
+function generalColors(f){const ks=[...new Set(ROWS.map(r=>r[f]||'未填'))].filter(k=>k!=='未填').sort((a,b)=>cnt(f,b)-cnt(f,a));const rp=ramp(ks.length),m={};ks.forEach((k,i)=>m[k]=rp[i]);m['未填']=GRAY;return m;}
+// 職等：越資深越深，未填灰
+function levelColors(){const ks=[...new Set(ROWS.map(r=>r.level||'未填'))];const nums=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const rp=ramp(nums.length);const m={};nums.forEach((k,i)=>m[k]=rp[nums.length-1-i]);ks.filter(k=>/intern/i.test(k)).forEach(k=>m[k]=mix(LIGHT,'#ffffff',.4));m['未填']=GRAY;return m;}
 
 // ① KPI
 (function(){const n=ROWS.length,by=s=>ROWS.filter(r=>r.status===s).length,pct=x=>Math.round(x/n*100),avg=Math.round(ROWS.reduce((s,r)=>s+r.days,0)/n);
   const kp=[['總關缺數',n,''],['錄取',by('錄取'),pct(by('錄取'))+'%'],['補缺',by('補缺'),pct(by('補缺'))+'%'],['內轉補缺',by('內轉補缺'),pct(by('內轉補缺'))+'%'],['平均報到天數',avg+' 天','Close → 報到']];
   document.getElementById('kpis').innerHTML=kp.map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('');})();
 
-// ②③ 量體長條
-function volBar(canvasId,boxId,f){const e=countBy(ROWS,f);document.getElementById(boxId).style.height=(e.length*28+40)+'px';
-  new Chart(document.getElementById(canvasId),{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#7c6cf0',borderRadius:4}]},options:{...base,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
-volBar('cFunc','bxFunc','func');
-volBar('cChan','bxChan','channel');
-
-// 五張相關性：100% 堆疊橫條 + 點圖例聚焦（其餘淡灰）
-function makeStack(canvasId,legId,boxId,rowDim,segDim){
-  const rf=F[rowDim],sf=F[segDim];
-  const rowKeys=keysOf(rowDim), segKeys=keysOf(segDim), cmap=colorMap(segDim);
-  const tot=rowKeys.map(rk=>ROWS.filter(r=>(r[rf]||'(未填)')===rk).length);
-  const cnt={};segKeys.forEach(sv=>cnt[sv]=rowKeys.map(rk=>ROWS.filter(r=>(r[rf]||'(未填)')===rk&&(r[sf]||'(未填)')===sv).length));
-  let focus=null;
-  document.getElementById(boxId).style.height=(rowKeys.length*30+44)+'px';
-  const fill=sv=>focus===null?MUTE:(sv===focus?cmap[sv]:MUTE2);
-  const datasets=segKeys.map(sv=>({label:sv,data:cnt[sv].map((n,i)=>tot[i]?+(n/tot[i]*100).toFixed(1):0),_counts:cnt[sv],backgroundColor:fill(sv),borderColor:'#fff',borderWidth:1.5,borderRadius:2}));
-  const chart=new Chart(document.getElementById(canvasId),{type:'bar',data:{labels:rowKeys,datasets},
-    options:{...base,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:it=>`${segDim} ${it.dataset.label}：${it.dataset._counts[it.dataIndex]} 筆（${it.parsed.x}%）`}}},
-      scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}}}});
-  const leg=document.getElementById(legId);
-  function render(){
-    leg.innerHTML=`<div class="hint">${focus?`只顯示「${segDim} ${focus}」— 再點一次清除`:`點色塊只看某一${segDim}`}</div>`
-      +segKeys.map(sv=>`<span class="chip ${focus===sv?'on':''}" data-sv="${sv}"><i style="background:${cmap[sv]};opacity:${focus===null||focus===sv?1:.35}"></i>${sv}</span>`).join('');
-    leg.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{const sv=c.dataset.sv;focus=focus===sv?null:sv;chart.data.datasets.forEach(d=>d.backgroundColor=fill(d.label));chart.update('none');render();});
-  }
-  render();
+// 共通：水平堆疊長條（絕對人數 + 數字標籤 + 「·列總」）
+function stackRef(canvasId,legId,boxId,rowDim,segDim,segIsLevel){
+  const rf={'職能':'func'}[rowDim]||rowDim, sf={'管道':'channel','來源':'src','職等':'level'}[segDim];
+  const rowKeys=[...new Set(ROWS.map(r=>r[rf]||'未填'))].sort((a,b)=>cnt(rf,b)-cnt(rf,a));
+  let segKeys=[...new Set(ROWS.map(r=>r[sf]||'未填'))];
+  const cmap=segIsLevel?levelColors():generalColors(sf);
+  segKeys=segIsLevel?orderLevels(segKeys):segKeys.filter(k=>k!=='未填').sort((a,b)=>cnt(sf,b)-cnt(sf,a)).concat([...new Set(ROWS.map(r=>r[sf]||'未填'))].includes('未填')?['未填']:[]);
+  // legend
+  document.getElementById(legId).innerHTML=segKeys.map(s=>`<span><span class="dot" style="background:${cmap[s]}"></span>${segIsLevel&&/^\d+$/.test(s)?'職等'+s:s}</span>`).join('');
+  const rowTot=rowKeys.map(rk=>ROWS.filter(r=>(r[rf]||'未填')===rk).length);
+  document.getElementById(boxId).style.height=(rowKeys.length*40+24)+'px';
+  const datasets=segKeys.map(sv=>({label:segIsLevel&&/^\d+$/.test(sv)?'職等'+sv:sv,
+    data:rowKeys.map(rk=>ROWS.filter(r=>(r[rf]||'未填')===rk&&(r[sf]||'未填')===sv).length),
+    backgroundColor:cmap[sv],borderRadius:3,datalabels:{color:labelColor(cmap[sv])}}));
+  new Chart(document.getElementById(canvasId),{type:'bar',
+    data:{labels:rowKeys.map((rk,i)=>rk+' · '+rowTot[i]),datasets},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw>0?c.dataset.label+' '+c.raw+' 筆':null}},
+        datalabels:{display:c=>c.dataset.data[c.dataIndex]>0,formatter:v=>v,font:{size:12,weight:'600'}}},
+      scales:{x:{stacked:true,beginAtZero:true,ticks:{stepSize:1,color:TICK},grid:{color:GRID}},
+        y:{stacked:true,ticks:{color:TICK},grid:{display:false}}}}});
 }
-makeStack('c4','lg4','bx4','職能','管道');
-makeStack('c5','lg5','bx5','職能','來源');
-makeStack('c6','lg6','bx6','職能','職等');
-makeStack('c7','lg7','bx7','職等','管道');
-makeStack('c8','lg8','bx8','職等','來源');
+stackRef('m2','lg2','bx2','職能','管道',false);
+stackRef('m3','lg3','bx3','職能','來源',false);
+stackRef('m4','lg4','bx4','職能','職等',true);
 
-// ⑨ 月趨勢
+// ⑤ 三維交叉表：職等 × 管道 × 來源
+(function(){
+  const lvKeys=orderLevels([...new Set(ROWS.map(r=>r.level||'未填'))]);
+  const srcKeys=[...new Set(ROWS.map(r=>r.src||'未填'))].filter(k=>k!=='未填').sort((a,b)=>cnt('src',b)-cnt('src',a));
+  if([...new Set(ROWS.map(r=>r.src||'未填'))].includes('未填'))srcKeys.push('未填');
+  let html='<table><thead><tr><th style="text-align:left">職等</th><th style="text-align:left">管道</th>'+srcKeys.map(s=>`<th>${s}</th>`).join('')+'<th>列總</th></tr></thead><tbody>';
+  const colTot={};srcKeys.forEach(s=>colTot[s]=0);let grand=0;
+  lvKeys.forEach(lv=>{
+    const chans=[...new Set(ROWS.filter(r=>(r.level||'未填')===lv).map(r=>r.channel||'未填'))].sort((a,b)=>cnt('channel',b)-cnt('channel',a));
+    chans.forEach((ch,ci)=>{
+      const rowCells=srcKeys.map(s=>ROWS.filter(r=>(r.level||'未填')===lv&&(r.channel||'未填')===ch&&(r.src||'未填')===s).length);
+      const rt=rowCells.reduce((a,b)=>a+b,0);grand+=rt;rowCells.forEach((v,i)=>colTot[srcKeys[i]]+=v);
+      const lvLabel=/^\d+$/.test(lv)?'職等'+lv:(lv==='未填'?'未填職等':lv);
+      html+='<tr>'+(ci===0?`<td class="grp" rowspan="${chans.length}">${lvLabel}</td>`:'')+`<td class="sub-c">${ch}</td>`
+        +rowCells.map(v=>v>0?`<td class="hit">${v}</td>`:'<td class="zero">0</td>').join('')+`<td class="rt">${rt}</td></tr>`;
+    });
+  });
+  html+='</tbody><tfoot><tr><td colspan="2" style="text-align:left">欄總</td>'+srcKeys.map(s=>`<td>${colTot[s]}</td>`).join('')+`<td>${grand}</td></tr></tfoot></table>`;
+  document.getElementById('xtab').innerHTML=html;
+})();
+
+// ⑥ 月趨勢
 {const m={};ROWS.forEach(r=>{const k=r.close_day.slice(0,7);m[k]=(m[k]||0)+1;});const keys=MONTHS.filter(k=>m[k]);
-  new Chart(document.getElementById('trend'),{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+  new Chart(document.getElementById('trend'),{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]),borderColor:DARK,backgroundColor:'rgba(21,67,111,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:DARK}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},datalabels:{display:false}},scales:{x:{ticks:{color:TICK},grid:{display:false}},y:{beginAtZero:true,ticks:{stepSize:1,color:TICK},grid:{color:GRID}}}}});}
 </script>
 </body>
 </html>
