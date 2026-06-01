@@ -3,42 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HR Head 視角 — 關缺圖表 Demo（bar/pie/line）</title>
+<title>HR Head 視角 — 關缺圖表 Demo（五張相關性 100% 堆疊橫條）</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--p:#7F77DD;--pd:#3C3489;--t:#1D9E75;--a:#BA7517;--bg:#F7F6F3;--surf:#fff;--bdr:rgba(0,0,0,.1);--text:#1A1A1A;--muted:#6B6A66;
+:root{--p:#7F77DD;--pd:#3C3489;--bg:#F7F6F3;--surf:#fff;--bdr:rgba(0,0,0,.1);--text:#1A1A1A;--muted:#6B6A66;
   font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;}
 body{background:var(--bg);color:var(--text);padding:26px;font-size:14px;line-height:1.5;max-width:1120px;margin:0 auto}
 h1{font-size:20px;color:var(--pd)}
 .sub{font-size:12px;color:var(--muted);margin:4px 0 20px}
-.divider{font-size:13px;font-weight:600;color:var(--pd);margin:26px 0 12px;padding-left:10px;border-left:3px solid var(--p)}
+.divider{font-size:13px;font-weight:600;color:var(--pd);margin:24px 0 12px;padding-left:10px;border-left:3px solid var(--p)}
 .card{background:var(--surf);border:.5px solid var(--bdr);border-radius:12px;padding:16px 18px;margin-bottom:16px}
 .ctitle{font-size:14px;font-weight:600;margin-bottom:2px}
-.ctitle .tag{font-size:10px;font-weight:600;color:#fff;background:var(--p);border-radius:100px;padding:1px 8px;margin-right:6px;vertical-align:middle}
 .cnote{font-size:11px;color:var(--muted);margin-bottom:12px}
-.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-@media(max-width:820px){.grid3{grid-template-columns:1fr}}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
 .kpi{background:var(--bg);border-radius:10px;padding:11px 13px}
-.kpi .l{font-size:11px;color:var(--muted)}
-.kpi .v{font-size:23px;font-weight:700;margin-top:2px}
-.kpi .s{font-size:11px;color:var(--muted)}
-.chartbox{position:relative;height:230px}
-.chartbox.tall{position:relative;height:300px}
-/* small multiples */
-.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:12px}
-.legend span{display:inline-flex;align-items:center;gap:4px}
-.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
-.smgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
-.sm{text-align:center}
-.sm .t{font-size:12px;font-weight:600;margin-bottom:4px}
-.sm .box{position:relative;height:130px}
+.kpi .l{font-size:11px;color:var(--muted)}.kpi .v{font-size:23px;font-weight:700;margin-top:2px}.kpi .s{font-size:11px;color:var(--muted)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:10px}
+.legend span{display:inline-flex;align-items:center;gap:4px}.legend i{width:11px;height:11px;border-radius:3px}
+.chartbox{position:relative}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<h1>📊 關缺圖表 — HR Head 視角（只用 數值／長條／圓餅／折線）</h1>
-<div class="sub">範例資料 120 筆。下半部「管道 × 職等」用兩種畫法給你比較，挑一種我就套到全部相關性圖。</div>
+<h1>📊 關缺圖表 — HR Head 視角</h1>
+<div class="sub">範例資料 120 筆。重點數字 + 五張相關性圖（100% 堆疊橫條）+ 月趨勢。橫條看占比，hover 看實際筆數。</div>
 
 <div class="card">
   <div class="ctitle">① 重點數字</div>
@@ -46,29 +36,16 @@ h1{font-size:20px;color:var(--pd)}
   <div class="kpis" id="kpis"></div>
 </div>
 
-<div class="grid3">
-  <div class="card"><div class="ctitle">② 各職務關缺數</div><div class="cnote">需求集中在哪些職務</div><div class="chartbox"><canvas id="byFunc"></canvas></div></div>
-  <div class="card"><div class="ctitle">③ 職等分布</div><div class="cnote">補的是資深還是基層</div><div class="chartbox"><canvas id="byLevel"></canvas></div></div>
-  <div class="card"><div class="ctitle">④ Status 分布</div><div class="cnote">錄取 / 補缺 / 內轉占比</div><div class="chartbox"><canvas id="byStatus"></canvas></div></div>
+<div class="divider">▼ 五張相關性圖（100% 堆疊橫條：一列一條、顏色＝占比）</div>
+<div class="grid2">
+  <div class="card"><div class="ctitle">② 職能 × 管道</div><div class="cnote">各職能靠哪些管道補人</div><div class="legend" id="lg2"></div><div class="chartbox" id="bx2"><canvas id="c2"></canvas></div></div>
+  <div class="card"><div class="ctitle">③ 職能 × 來源</div><div class="cnote">各職能來自哪些來源</div><div class="legend" id="lg3"></div><div class="chartbox" id="bx3"><canvas id="c3"></canvas></div></div>
+  <div class="card"><div class="ctitle">④ 職能 × 職等</div><div class="cnote">各職能的職等結構</div><div class="legend" id="lg4"></div><div class="chartbox" id="bx4"><canvas id="c4"></canvas></div></div>
+  <div class="card"><div class="ctitle">⑤ 職等 × 管道</div><div class="cnote">各職等靠哪些管道（資深靠誰？）</div><div class="legend" id="lg5"></div><div class="chartbox" id="bx5"><canvas id="c5"></canvas></div></div>
 </div>
+<div class="card"><div class="ctitle">⑥ 職等 × 來源</div><div class="cnote">各職等來自哪些來源</div><div class="legend" id="lg6"></div><div class="chartbox" id="bx6"><canvas id="c6"></canvas></div></div>
 
-<div class="card"><div class="ctitle">⑤ 月趨勢（依 Close Day）</div><div class="cnote">關缺量隨時間變化</div><div class="chartbox"><canvas id="trend"></canvas></div></div>
-
-<div class="divider">▼ 相關性「管道 × 職等」— 兩種畫法請挑一種（同一份資料）</div>
-
-<div class="card">
-  <div class="ctitle"><span class="tag">A 案</span>100% 堆疊橫條</div>
-  <div class="cnote">一個管道一條，用顏色分職等的<b>占比</b>。看出「每個管道的職等結構」：獵頭偏資深、104/校園偏基層。</div>
-  <div class="legend" id="legA"></div>
-  <div class="chartbox tall"><canvas id="stackA"></canvas></div>
-</div>
-
-<div class="card">
-  <div class="ctitle"><span class="tag">B 案</span>小倍數圓餅</div>
-  <div class="cnote">一個管道一個小圓餅，各看其職等組成。像每個管道的「職等指紋」，一排比下來很直覺。</div>
-  <div class="legend" id="legB"></div>
-  <div class="smgrid" id="smPies"></div>
-</div>
+<div class="card"><div class="ctitle">⑦ 月趨勢（依 Close Day）</div><div class="cnote">關缺量隨時間變化</div><div class="chartbox" style="height:230px"><canvas id="trend"></canvas></div></div>
 
 <script>
 const FUNCS={'後端工程':'工程部','前端工程':'工程部','資料科學':'AI技術應用組','產品經理':'產品部','行銷企劃':'行銷運營部','業務開發':'業務部','人資':'人力資源部','UI/UX 設計':'產品部'};
@@ -91,8 +68,11 @@ for(let i=0;i<120;i++){const ch=pick(CH),r=RULES[ch],fn=pick(FN);
 
 const orderLevels=ks=>{const n=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const it=ks.filter(k=>/intern/i.test(k));const o=ks.filter(k=>n.indexOf(k)<0&&it.indexOf(k)<0).sort();return[...n,...o,...it];};
 const lvColor=lv=>{const i=['1','2','3','4','5','6'].indexOf(lv);if(i>=0)return 'hsl(252,68%,'+(78-i*9.6).toFixed(0)+'%)';if(/intern/i.test(lv))return '#0d9488';return '#cbd5e1';};
-const countBy=(rows,f)=>{const m={};rows.forEach(v=>{const k=v[f]||'(未填)';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
-const LEVELS=orderLevels([...new Set(ROWS.map(r=>r.level))]);
+const PAL=['#7F77DD','#1D9E75','#BA7517','#D85A30','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#64748b'];
+const F={'職能':'func','管道':'channel','來源':'src','職等':'level'};
+const byTotalDesc=(f,ks)=>ks.sort((a,b)=>ROWS.filter(r=>(r[f]||'(未填)')===b).length-ROWS.filter(r=>(r[f]||'(未填)')===a).length);
+const keysOf=dim=>{const f=F[dim];let ks=[...new Set(ROWS.map(r=>r[f]||'(未填)'))];return dim==='職等'?orderLevels(ks):byTotalDesc(f,ks);};
+function colorMap(dim){const m={};if(dim==='職等'){keysOf(dim).forEach(k=>m[k]=lvColor(k));}else{keysOf(dim).forEach((k,i)=>m[k]=PAL[i%PAL.length]);}return m;}
 const base={responsive:true,maintainAspectRatio:false,animation:false};
 
 // ① KPI
@@ -100,44 +80,30 @@ const base={responsive:true,maintainAspectRatio:false,animation:false};
   const kp=[['總關缺數',n,''],['錄取',by('錄取'),pct(by('錄取'))+'%'],['補缺',by('補缺'),pct(by('補缺'))+'%'],['內轉補缺',by('內轉補缺'),pct(by('內轉補缺'))+'%'],['平均報到天數',avg+' 天','Close → 報到']];
   document.getElementById('kpis').innerHTML=kp.map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('');})();
 
-// ② 各職務（橫條）
-{const e=countBy(ROWS,'func');new Chart(document.getElementById('byFunc'),{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#7c6cf0',borderRadius:4}]},options:{...base,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
-// ③ 職等分布（圓餅）
-{const e=LEVELS.map(l=>[l,ROWS.filter(r=>r.level===l).length]);new Chart(document.getElementById('byLevel'),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>lvColor(x[0]))}]},options:{...base,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:6}}}}});}
-// ④ Status（圓餅）
-{const sc={'錄取':'#1D9E75','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy(ROWS,'status');new Chart(document.getElementById('byStatus'),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>sc[x[0]]||'#999')}]},options:{...base,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:6}}}}});}
-// ⑤ 月趨勢
-{const m={};ROWS.forEach(r=>{const k=r.close_day.slice(0,7);m[k]=(m[k]||0)+1;});const keys=MONTHS.filter(k=>m[k]);
-  new Chart(document.getElementById('trend'),{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
-
-// 共用：管道列（依總量排序）
-const chOrder=countBy(ROWS,'channel').map(x=>x[0]);
-const legHTML=LEVELS.map(l=>`<span><i style="background:${lvColor(l)}"></i>${l}</span>`).join('');
-document.getElementById('legA').innerHTML=legHTML;
-document.getElementById('legB').innerHTML=legHTML;
-
-// A 案：100% 堆疊橫條
-{
-  const datasets=LEVELS.map(lv=>{
-    const counts=chOrder.map(c=>ROWS.filter(r=>r.channel===c&&r.level===lv).length);
-    const tot=chOrder.map(c=>ROWS.filter(r=>r.channel===c).length);
-    return{label:lv,data:counts.map((n,i)=>tot[i]?+(n/tot[i]*100).toFixed(1):0),_counts:counts,backgroundColor:lvColor(lv),borderRadius:2};
+// 通用：100% 堆疊橫條（rowDim 一列、segDim 占比）
+function stackBar(canvasId,boxId,legId,rowDim,segDim){
+  const rf=F[rowDim],sf=F[segDim];
+  const rowKeys=keysOf(rowDim), segKeys=keysOf(segDim), cmap=colorMap(segDim);
+  document.getElementById(legId).innerHTML=segKeys.map(s=>`<span><i style="background:${cmap[s]}"></i>${s}</span>`).join('');
+  document.getElementById(boxId).style.height=(rowKeys.length*30+40)+'px';
+  const tot=rowKeys.map(rk=>ROWS.filter(r=>(r[rf]||'(未填)')===rk).length);
+  const datasets=segKeys.map(sv=>{
+    const counts=rowKeys.map(rk=>ROWS.filter(r=>(r[rf]||'(未填)')===rk&&(r[sf]||'(未填)')===sv).length);
+    return{label:sv,data:counts.map((n,i)=>tot[i]?+(n/tot[i]*100).toFixed(1):0),_counts:counts,backgroundColor:cmap[sv],borderRadius:2};
   });
-  new Chart(document.getElementById('stackA'),{type:'bar',data:{labels:chOrder,datasets},
-    options:{...base,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:it=>`職等 ${it.dataset.label}：${it.dataset._counts[it.dataIndex]} 筆（${it.parsed.x}%）`}}},
+  new Chart(document.getElementById(canvasId),{type:'bar',data:{labels:rowKeys,datasets},
+    options:{...base,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:it=>`${segDim} ${it.dataset.label}：${it.dataset._counts[it.dataIndex]} 筆（${it.parsed.x}%）`}}},
       scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}}}});
 }
+stackBar('c2','bx2','lg2','職能','管道');
+stackBar('c3','bx3','lg3','職能','來源');
+stackBar('c4','bx4','lg4','職能','職等');
+stackBar('c5','bx5','lg5','職等','管道');
+stackBar('c6','bx6','lg6','職等','來源');
 
-// B 案：小倍數圓餅（每管道一個）
-{
-  const host=document.getElementById('smPies');
-  host.innerHTML=chOrder.map((c,i)=>`<div class="sm"><div class="t">${c}</div><div class="box"><canvas id="sm${i}"></canvas></div></div>`).join('');
-  chOrder.forEach((c,i)=>{
-    const e=LEVELS.map(l=>[l,ROWS.filter(r=>r.channel===c&&r.level===l).length]).filter(x=>x[1]>0);
-    new Chart(document.getElementById('sm'+i),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>lvColor(x[0]))}]},
-      options:{...base,plugins:{legend:{display:false},tooltip:{callbacks:{label:it=>`職等 ${it.label}：${it.parsed} 筆`}}}}});
-  });
-}
+// ⑦ 月趨勢
+{const m={};ROWS.forEach(r=>{const k=r.close_day.slice(0,7);m[k]=(m[k]||0)+1;});const keys=MONTHS.filter(k=>m[k]);
+  new Chart(document.getElementById('trend'),{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
 </script>
 </body>
 </html>
