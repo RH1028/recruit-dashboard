@@ -43,7 +43,7 @@ td.zero{color:var(--text3)}
 <body>
 <div class="page">
   <h1>📊 關缺交叉分析 — HR Demo</h1>
-  <p class="sub">範例資料 36 筆｜單一藍色家族配色（資深越深、未填灰）｜堆疊長條標人數、可四邊對帳</p>
+  <p class="sub">範例資料 36 筆｜單一藍色家族配色（數量越多越深、未填灰）｜堆疊長條標人數、可四邊對帳</p>
 
   <div class="block">
     <p class="title">① 重點數字</p>
@@ -107,10 +107,16 @@ const isLight=h=>{const[r,g,b]=hex2rgb(h);return .299*r+.587*g+.114*b>150;};
 const labelColor=h=>isLight(h)?'#15436F':'#fff';
 const cnt=(f,v)=>ROWS.filter(r=>(r[f]||'未填')===v).length;
 const orderLevels=ks=>{const n=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const it=ks.filter(k=>/intern/i.test(k));const bl=ks.filter(k=>k==='未填');return[...n,...it,...bl];};
-// 一般維度：主力最深→遞淺，未填灰
-function generalColors(f){const ks=[...new Set(ROWS.map(r=>r[f]||'未填'))].filter(k=>k!=='未填').sort((a,b)=>cnt(f,b)-cnt(f,a));const rp=ramp(ks.length),m={};ks.forEach((k,i)=>m[k]=rp[i]);m['未填']=GRAY;return m;}
-// 職等：越資深越深，未填灰
-function levelColors(){const ks=[...new Set(ROWS.map(r=>r.level||'未填'))];const nums=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const rp=ramp(nums.length);const m={};nums.forEach((k,i)=>m[k]=rp[nums.length-1-i]);ks.filter(k=>/intern/i.test(k)).forEach(k=>m[k]=mix(LIGHT,'#ffffff',.4));m['未填']=GRAY;return m;}
+// 統一配色：數量越多顏色越深（深→淺），未填固定灰
+function colorByCount(f){
+  const all=[...new Set(ROWS.map(r=>r[f]||'未填'))];
+  const nonBlank=all.filter(k=>k!=='未填').sort((a,b)=>cnt(f,b)-cnt(f,a));  // 多→少
+  const rp=ramp(nonBlank.length),color={};
+  nonBlank.forEach((k,i)=>color[k]=rp[i]);                                  // 最多=最深
+  const order=[...nonBlank];
+  if(all.includes('未填')){color['未填']=GRAY;order.push('未填');}
+  return{order,color};
+}
 
 // ① KPI
 (function(){const n=ROWS.length,by=s=>ROWS.filter(r=>r.status===s).length,pct=x=>Math.round(x/n*100),avg=Math.round(ROWS.reduce((s,r)=>s+r.days,0)/n);
@@ -121,9 +127,7 @@ function levelColors(){const ks=[...new Set(ROWS.map(r=>r.level||'未填'))];con
 function stackRef(canvasId,legId,boxId,rowDim,segDim,segIsLevel){
   const rf={'職能':'func'}[rowDim]||rowDim, sf={'管道':'channel','來源':'src','職等':'level'}[segDim];
   const rowKeys=[...new Set(ROWS.map(r=>r[rf]||'未填'))].sort((a,b)=>cnt(rf,b)-cnt(rf,a));
-  let segKeys=[...new Set(ROWS.map(r=>r[sf]||'未填'))];
-  const cmap=segIsLevel?levelColors():generalColors(sf);
-  segKeys=segIsLevel?orderLevels(segKeys):segKeys.filter(k=>k!=='未填').sort((a,b)=>cnt(sf,b)-cnt(sf,a)).concat([...new Set(ROWS.map(r=>r[sf]||'未填'))].includes('未填')?['未填']:[]);
+  const {order:segKeys,color:cmap}=colorByCount(sf);   // 數量多→深，未填灰
   // legend
   document.getElementById(legId).innerHTML=segKeys.map(s=>`<span><span class="dot" style="background:${cmap[s]}"></span>${segIsLevel&&/^\d+$/.test(s)?'職等'+s:s}</span>`).join('');
   const rowTot=rowKeys.map(rk=>ROWS.filter(r=>(r[rf]||'未填')===rk).length);
