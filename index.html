@@ -486,8 +486,9 @@ function getDemoTasks(){
   {task_id:'T7',task_name:'每週 Pipeline Review',task_type:'常態工作',member:'Ava',team_kr_ref:'',           member_kr_ref:'',    level:'L1',est_hours:1,  actual_hours:0.8,completion_pct:0,  status:'進行中',note:''},
   {task_id:'T8',task_name:'面試官培訓簡報',    task_type:'專案任務',member:'Ava', team_kr_ref:teamKR1Social,member_kr_ref:mbpKR1,level:'L2',est_hours:5,  actual_hours:4.5,completion_pct:100,status:'完成',  note:'',start_date:'2026-04-01',end_date:'2026-05-01'},
 ];}
-// 部門＝AI技術應用組 但職能空白者，自動把職能填為「AI技術應用組」（載入時統一處理）
-function normVacs(arr){return (arr||[]).map(v=>{const f=(v.func||'').toString().trim();return (v.dept==='AI技術應用組'&&!f)?{...v,func:'AI技術應用組'}:v;});}
+// 職能空白者，自動用「部門」當職能（載入時即時計算、不寫回來源）
+// → 來源表之後補上真實職能，下次載入會直接覆蓋此暫代值
+function normVacs(arr){return (arr||[]).map(v=>{const f=(v.func||'').toString().trim();const d=(v.dept||'').toString().trim();return (!f&&d)?{...v,func:d}:v;});}
 function getDemoVac(){return[
   // Demo 資料模擬外部缺額表（4 部門分頁，Status ∈ 錄取/補缺/內轉補缺）
   {vac_id:'EXT-1',dept:'行銷運營部',func:'行銷運營組',level:'G5',grade:'資深專員',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',channel:'獵頭',src:'LinkedIn',status:'錄取',title:'資深行銷運營專員',_source:'external'},
@@ -1476,10 +1477,19 @@ function orderLevels(levels){
   const other=levels.filter(l=>num.indexOf(l)<0&&intern.indexOf(l)<0&&blank.indexOf(l)<0).sort();
   return[...num,...other,...intern,...blank];
 }
-function openVacCharts(){
+async function openVacCharts(){
   if(typeof Chart==='undefined'){alert('圖表元件尚在載入（需連網），請稍候再試一次。');return;}
   document.getElementById('chart-modal').classList.add('open');
-  renderVacChartsInner();
+  renderVacChartsInner();                       // 先用目前資料立即呈現
+  if(isLive()){                                  // 連線時靜默抓最新來源資料重畫（即時覆蓋暫代值）
+    try{
+      const d=await apiPost({action:'getAll'});
+      if(d&&!d.error){
+        S.vacancies=normVacs(d.vacancies||S.vacancies);
+        if(document.getElementById('chart-modal').classList.contains('open'))renderVacChartsInner();
+      }
+    }catch(e){}
+  }
 }
 function renderVacChartsInner(){
   const data=getFilteredVacancies();
