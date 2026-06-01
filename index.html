@@ -438,9 +438,12 @@ try{cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'{}');}catch(e){cfg={};}
 // 預覽用參數：?demo=1 走 Demo 模式；?role=viewer|editor|admin 以該角色 Demo 預覽（驗收各角色畫面用）
 const _qp=(k)=>{try{return new URLSearchParams(location.search).get(k);}catch(e){return null;}};
 const PREVIEW_ROLE=(()=>{const r=_qp('role');return ['viewer','editor','admin'].indexOf(r)>=0?r:null;})();
-// hasApi：是否走真實後端（demo / 預覽角色時一律 false，不需密碼）
+// 公開展示模式：?showcase=1 → 只用 Demo 假資料、完全不連後端、需輸入密碼 1234（viewer）
+const SHOWCASE=_qp('showcase')==='1';
+let scUnlocked=false;
+// hasApi：是否走真實後端（demo / 預覽角色 / 展示模式 時一律 false，不碰真實資料）
 const hasApi=()=>{
-  if(_qp('demo')==='1'||PREVIEW_ROLE)return false;
+  if(SHOWCASE||_qp('demo')==='1'||PREVIEW_ROLE)return false;
   return !!cfg.apiUrl;
 };
 const isLive=()=>hasApi();
@@ -489,14 +492,27 @@ function getDemoTasks(){
 // 職能空白者，自動用「部門」當職能（載入時即時計算、不寫回來源）
 // → 來源表之後補上真實職能，下次載入會直接覆蓋此暫代值
 function normVacs(arr){return (arr||[]).map(v=>{const f=(v.func||'').toString().trim();const d=(v.dept||'').toString().trim();return (!f&&d)?{...v,func:d}:v;});}
-function getDemoVac(){return[
-  // Demo 資料模擬外部缺額表（4 部門分頁，Status ∈ 錄取/補缺/內轉補缺）
-  {vac_id:'EXT-1',dept:'行銷運營部',func:'行銷運營組',level:'G5',grade:'資深專員',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',channel:'獵頭',src:'LinkedIn',status:'錄取',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-2',dept:'行銷運營部',func:'行銷運營組',level:'G5',grade:'資深專員',biz:'合作夥伴事業群',close_day:'2025-10-09',onboard_day:'2025-10-27',reporter:'王怡方',channel:'內推',src:'員工推薦',status:'補缺',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-3',dept:'工程部',func:'後端工程組',level:'G6',grade:'技術主管',biz:'消費事業',close_day:'2026-01-16',onboard_day:'2026-02-23',reporter:'馬筱淳',channel:'主動應徵',src:'104',status:'內轉補缺',title:'後端工程師',_source:'external'},
-  {vac_id:'EXT-4',dept:'AI技術應用組',func:'大數據組',level:'G6',grade:'資深工程師',biz:'部門',close_day:'2024-08-12',onboard_day:'2024-09-18',reporter:'彭聿采',channel:'獵頭',src:'CakeResume',status:'錄取',title:'Big Data Engineer',_source:'external'},
-  {vac_id:'EXT-5',dept:'業務部',func:'業務開發組',level:'G4',grade:'專員',biz:'部門',close_day:'2024-06-25',onboard_day:'2024-10-01',reporter:'廖偉丞',channel:'主動應徵',src:'LinkedIn',status:'補缺',title:'業務開發專員',_source:'external'},
-];}
+let _demoVacCache=null;
+function getDemoVac(){
+  if(_demoVacCache)return _demoVacCache.map(v=>({...v}));   // 一次性生成、整個 session 穩定
+  // 部門→職能（AI技術應用組、人力資源部 故意留空，展示「職能空白自動以部門補值」）
+  const DEPTS=[['工程部',['後端工程','前端工程','資料工程']],['行銷運營部',['行銷企劃','社群運營','內容企劃']],['業務部',['業務開發','客戶經營']],['產品部',['產品經理','UI/UX 設計']],['AI技術應用組',[]],['人力資源部',[]]];
+  // 管道→職等/來源（製造相關性：獵頭偏資深、104偏基層、校園偏 intern）
+  const RULES={'104':{lv:['1','2','2','3'],src:['主投','官網']},'LinkedIn':{lv:['3','4','4','5'],src:['主投','獵才_Lydia']},'內部推薦':{lv:['2','3','3','4'],src:['員工推薦','同事']},'獵頭':{lv:['5','5','6'],src:['獵才_Lydia','獵才_Johnny']},'校園招募':{lv:['1','intern','intern'],src:['台灣大學','官網']}};
+  const CHS=Object.keys(RULES),MON=['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02'],REP=['呂怡嬅','王怡方','馬筱淳','彭聿采','廖偉丞'];
+  const pk=a=>a[Math.floor(Math.random()*a.length)];
+  const out=[];
+  for(let i=0;i<28;i++){
+    const dp=pk(DEPTS),ch=pk(CHS),r=RULES[ch];
+    const cd=pk(MON)+'-'+String(5+Math.floor(Math.random()*22)).padStart(2,'0');
+    const ob=new Date(new Date(cd).getTime()+(20+Math.floor(Math.random()*35))*86400000).toISOString().slice(0,10);
+    out.push({vac_id:'EXT-'+(i+1),dept:dp[0],func:dp[1].length?pk(dp[1]):'',level:pk(r.lv),grade:'',biz:'部門',
+      close_day:cd,onboard_day:ob,reporter:pk(REP),channel:ch,src:pk(r.src),status:pk(['錄取','錄取','補缺','內轉補缺']),
+      title:dp[0]+'職缺',_source:'external'});
+  }
+  _demoVacCache=out;
+  return out.map(v=>({...v}));
+}
 
 function getDemoPipeline(){return[
   {pip_id:'P1',name:'王小明',role:'後端工程師',stage:'技術面試',src:'LinkedIn',rec:'Ava',note:'技術能力強，薪資期待較高'},
@@ -564,6 +580,7 @@ async function apiPost(b){
 }
 // 用存取密碼向後端解析角色；demo 無 api → admin 預覽；無/錯密碼 → null（之後整頁擋住）
 async function resolveRole(){
+  if(SHOWCASE){session=scUnlocked?{role:'viewer',name:'訪客',demo:true}:null;return;} // 展示模式：1234 解鎖後為 viewer
   if(!hasApi()){const role=PREVIEW_ROLE||'admin';session={role,name:'Demo（'+role+'）',demo:true};return;}
   if(!cfg.accessPw){session=null;return;}
   const r=await apiPost({action:'whoami'});
@@ -1831,13 +1848,35 @@ function applyRoleUI(){
     const rl={admin:'管理者',editor:'編輯',viewer:'檢視'}[session.role]||session.role;
     if(tu)tu.innerHTML=`👤 ${esc(session.name||'')} <span class="trole ${esc(session.role)}">${rl}</span>`;
   }else if(tu)tu.innerHTML='';
-  // 存取門檻
-  const gate=document.getElementById('access-gate'),gm=document.getElementById('gate-msg');
+  const gate=document.getElementById('access-gate');
+  // 公開展示模式：密碼 1234 門檻、藏設定/重新載入/連線提示
+  if(SHOWCASE){
+    ['btn-config','btn-logout'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    const b=document.getElementById('banner');if(b)b.style.display='none';
+    const card=gate&&gate.querySelector('.gate-card');
+    if(card&&card.dataset.sc!=='1'){card.dataset.sc='1';
+      card.innerHTML=`<h2>🔐 Recruit Team Dashboard</h2><p>範例展示版（Demo 資料）<br>請輸入存取密碼進入（檢視模式）</p>`
+        +`<input id="sc-pw" class="ic" type="password" placeholder="存取密碼" style="text-align:center;font-size:15px;padding:10px;margin-bottom:4px" onkeydown="if(event.key==='Enter')scEnter()">`
+        +`<div id="sc-err" style="font-size:11px;color:var(--c);min-height:15px"></div>`
+        +`<button class="btn" style="width:100%;background:var(--p);color:#fff;border-color:var(--p)" onclick="scEnter()">進入</button>`;}
+    if(gate)gate.classList.toggle('open',!scUnlocked);
+    return;
+  }
+  // 一般存取門檻
+  const gm=document.getElementById('gate-msg');
   const blocked=hasApi()&&!session;
   if(gm)gm.innerHTML=(cfg.accessPw
       ? '存取密碼無效或帳號已停用。請點「開啟設定」重新填寫，或洽管理者確認 Google Sheet 的 Users 分頁。'
       : '請點下方「開啟設定」，填入 Apps Script URL 與你的存取密碼。<br>密碼由管理者在 Google Sheet 的 Users 分頁設定。');
   if(gate)gate.classList.toggle('open',blocked);
+}
+// 展示模式進場：密碼 1234 → viewer
+function scEnter(){
+  const pw=(document.getElementById('sc-pw')||{}).value||'';
+  if(pw==='1234'){scUnlocked=true;session={role:'viewer',name:'訪客',demo:true};
+    document.getElementById('access-gate').classList.remove('open');
+    applyRoleUI();try{renderAll();}catch(e){}}
+  else{const e=document.getElementById('sc-err');if(e)e.textContent='密碼錯誤，請再試一次';}
 }
 </script>
 </body>
