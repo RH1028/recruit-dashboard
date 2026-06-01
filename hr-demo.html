@@ -3,43 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HR Head 視角 — 關缺圖表 Demo（固定版）</title>
+<title>HR Head 視角 — 關缺圖表 Demo（bar/pie/line）</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--p:#7F77DD;--pd:#3C3489;--t:#1D9E75;--a:#BA7517;--c:#D85A30;--bg:#F7F6F3;--surf:#fff;--bdr:rgba(0,0,0,.1);--text:#1A1A1A;--muted:#6B6A66;
+:root{--p:#7F77DD;--pd:#3C3489;--t:#1D9E75;--a:#BA7517;--bg:#F7F6F3;--surf:#fff;--bdr:rgba(0,0,0,.1);--text:#1A1A1A;--muted:#6B6A66;
   font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;}
 body{background:var(--bg);color:var(--text);padding:26px;font-size:14px;line-height:1.5;max-width:1120px;margin:0 auto}
 h1{font-size:20px;color:var(--pd)}
 .sub{font-size:12px;color:var(--muted);margin:4px 0 20px}
+.divider{font-size:13px;font-weight:600;color:var(--pd);margin:26px 0 12px;padding-left:10px;border-left:3px solid var(--p)}
 .card{background:var(--surf);border:.5px solid var(--bdr);border-radius:12px;padding:16px 18px;margin-bottom:16px}
 .ctitle{font-size:14px;font-weight:600;margin-bottom:2px}
+.ctitle .tag{font-size:10px;font-weight:600;color:#fff;background:var(--p);border-radius:100px;padding:1px 8px;margin-right:6px;vertical-align:middle}
 .cnote{font-size:11px;color:var(--muted);margin-bottom:12px}
 .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:820px){.grid3,.grid2{grid-template-columns:1fr}}
-/* KPI */
+@media(max-width:820px){.grid3{grid-template-columns:1fr}}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
 .kpi{background:var(--bg);border-radius:10px;padding:11px 13px}
 .kpi .l{font-size:11px;color:var(--muted)}
 .kpi .v{font-size:23px;font-weight:700;margin-top:2px}
 .kpi .s{font-size:11px;color:var(--muted)}
 .chartbox{position:relative;height:230px}
-.chartbox.tall{height:260px}
-/* heatmap */
-table.hm{border-collapse:separate;border-spacing:3px;width:100%}
-table.hm th{font-size:11px;color:var(--muted);font-weight:600;padding:3px 5px;text-align:center;white-space:nowrap}
-table.hm th.rowh{text-align:right;min-width:78px}
-table.hm td{height:34px;text-align:center;font-size:12px;font-weight:600;border-radius:6px;color:#fff;min-width:40px}
-table.hm td.z{color:#d4d2cc;background:#f3f2ee!important;font-weight:400}
-table.hm td.tot,table.hm th.tot{background:#eceaf6;color:var(--pd);font-weight:700}
-.note{font-size:11px;color:var(--muted);margin-top:10px}
-.note b{color:var(--pd)}
+.chartbox.tall{position:relative;height:300px}
+/* small multiples */
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:12px}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.smgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.sm{text-align:center}
+.sm .t{font-size:12px;font-weight:600;margin-bottom:4px}
+.sm .box{position:relative;height:130px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<h1>📊 關缺圖表 — HR Head 視角（固定版）</h1>
-<div class="sub">範例資料 120 筆。每張圖鎖定一個用途、用最適合的圖型；不需自選維度。</div>
+<h1>📊 關缺圖表 — HR Head 視角（只用 數值／長條／圓餅／折線）</h1>
+<div class="sub">範例資料 120 筆。下半部「管道 × 職等」用兩種畫法給你比較，挑一種我就套到全部相關性圖。</div>
 
 <div class="card">
   <div class="ctitle">① 重點數字</div>
@@ -53,42 +52,34 @@ table.hm td.tot,table.hm th.tot{background:#eceaf6;color:var(--pd);font-weight:7
   <div class="card"><div class="ctitle">④ Status 分布</div><div class="cnote">錄取 / 補缺 / 內轉占比</div><div class="chartbox"><canvas id="byStatus"></canvas></div></div>
 </div>
 
-<div class="card">
-  <div class="ctitle">⑤ 管道 × 職等（熱力圖）</div>
-  <div class="cnote">哪個管道帶進哪種職等 — 例：資深缺靠誰、104 是否只進基層。底色越深越集中。</div>
-  <div style="overflow-x:auto" id="hm_ch_lv"></div>
-  <div class="note" id="ins_ch_lv"></div>
-</div>
+<div class="card"><div class="ctitle">⑤ 月趨勢（依 Close Day）</div><div class="cnote">關缺量隨時間變化</div><div class="chartbox"><canvas id="trend"></canvas></div></div>
 
-<div class="grid2">
-  <div class="card">
-    <div class="ctitle">⑥ 職務 × 職等（熱力圖）</div>
-    <div class="cnote">各職務的職等結構</div>
-    <div style="overflow-x:auto" id="hm_fn_lv"></div>
-  </div>
-  <div class="card">
-    <div class="ctitle">⑦ 來源 × 職等（熱力圖）</div>
-    <div class="cnote">哪個來源帶進哪種職等</div>
-    <div style="overflow-x:auto" id="hm_src_lv"></div>
-  </div>
+<div class="divider">▼ 相關性「管道 × 職等」— 兩種畫法請挑一種（同一份資料）</div>
+
+<div class="card">
+  <div class="ctitle"><span class="tag">A 案</span>100% 堆疊橫條</div>
+  <div class="cnote">一個管道一條，用顏色分職等的<b>占比</b>。看出「每個管道的職等結構」：獵頭偏資深、104/校園偏基層。</div>
+  <div class="legend" id="legA"></div>
+  <div class="chartbox tall"><canvas id="stackA"></canvas></div>
 </div>
 
 <div class="card">
-  <div class="ctitle">⑧ 月趨勢（依 Close Day）</div>
-  <div class="cnote">關缺量隨時間變化</div>
-  <div class="chartbox"><canvas id="trend"></canvas></div>
+  <div class="ctitle"><span class="tag">B 案</span>小倍數圓餅</div>
+  <div class="cnote">一個管道一個小圓餅，各看其職等組成。像每個管道的「職等指紋」，一排比下來很直覺。</div>
+  <div class="legend" id="legB"></div>
+  <div class="smgrid" id="smPies"></div>
 </div>
 
 <script>
 const FUNCS={'後端工程':'工程部','前端工程':'工程部','資料科學':'AI技術應用組','產品經理':'產品部','行銷企劃':'行銷運營部','業務開發':'業務部','人資':'人力資源部','UI/UX 設計':'產品部'};
 const FN=Object.keys(FUNCS);
 const RULES={
- 'LinkedIn':{lv:['3','3','4','4','5'],src:['主投','主投','官網'],st:['錄取','補缺','錄取']},
+ 'LinkedIn':{lv:['3','3','4','4','5'],src:['主投','官網'],st:['錄取','補缺','錄取']},
  '104':{lv:['1','2','2','3','intern'],src:['主投','官網'],st:['補缺','錄取','補缺']},
  '內部推薦':{lv:['2','3','3','4'],src:['員工推薦','同事'],st:['補缺','錄取']},
  '獵頭':{lv:['4','5','5','6'],src:['獵才_Lydia','獵才_Johnny'],st:['錄取','錄取','補缺']},
- '校園招募':{lv:['intern','intern','1'],src:['台灣大學','官網'],st:['錄取','補缺']},
- '內轉':{lv:['2','3','4'],src:['同事','員工推薦'],st:['內轉補缺','內轉補缺']},
+ '校園招募':{lv:['intern','intern','1'],src:['台灣大學'],st:['錄取','補缺']},
+ '內轉':{lv:['2','3','4'],src:['同事'],st:['內轉補缺','內轉補缺']},
 };
 const CH=Object.keys(RULES);
 const MONTHS=['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02','2026-03'];
@@ -96,49 +87,57 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 const ROWS=[];
 for(let i=0;i<120;i++){const ch=pick(CH),r=RULES[ch],fn=pick(FN);
   ROWS.push({func:fn,dept:FUNCS[fn],channel:ch,src:pick(r.src),level:pick(r.lv),status:pick(r.st),
-    close_day:pick(MONTHS)+'-'+String(5+Math.floor(Math.random()*20)).padStart(2,'0'),days:18+Math.floor(Math.random()*40)});}
+    close_day:pick(MONTHS)+'-15',days:18+Math.floor(Math.random()*40)});}
 
 const orderLevels=ks=>{const n=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const it=ks.filter(k=>/intern/i.test(k));const o=ks.filter(k=>n.indexOf(k)<0&&it.indexOf(k)<0).sort();return[...n,...o,...it];};
 const lvColor=lv=>{const i=['1','2','3','4','5','6'].indexOf(lv);if(i>=0)return 'hsl(252,68%,'+(78-i*9.6).toFixed(0)+'%)';if(/intern/i.test(lv))return '#0d9488';return '#cbd5e1';};
 const countBy=(rows,f)=>{const m={};rows.forEach(v=>{const k=v[f]||'(未填)';m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
+const LEVELS=orderLevels([...new Set(ROWS.map(r=>r.level))]);
+const base={responsive:true,maintainAspectRatio:false,animation:false};
 
 // ① KPI
 (function(){const n=ROWS.length,by=s=>ROWS.filter(r=>r.status===s).length,pct=x=>Math.round(x/n*100),avg=Math.round(ROWS.reduce((s,r)=>s+r.days,0)/n);
   const kp=[['總關缺數',n,''],['錄取',by('錄取'),pct(by('錄取'))+'%'],['補缺',by('補缺'),pct(by('補缺'))+'%'],['內轉補缺',by('內轉補缺'),pct(by('內轉補缺'))+'%'],['平均報到天數',avg+' 天','Close → 報到']];
   document.getElementById('kpis').innerHTML=kp.map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('');})();
 
-const base={responsive:true,maintainAspectRatio:false,animation:false};
 // ② 各職務（橫條）
 {const e=countBy(ROWS,'func');new Chart(document.getElementById('byFunc'),{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#7c6cf0',borderRadius:4}]},options:{...base,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
 // ③ 職等分布（圓餅）
-{const e=orderLevels([...new Set(ROWS.map(r=>r.level))]).map(l=>[l,ROWS.filter(r=>r.level===l).length]);new Chart(document.getElementById('byLevel'),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>lvColor(x[0]))}]},options:{...base,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:8}}}}});}
+{const e=LEVELS.map(l=>[l,ROWS.filter(r=>r.level===l).length]);new Chart(document.getElementById('byLevel'),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>lvColor(x[0]))}]},options:{...base,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:6}}}}});}
 // ④ Status（圓餅）
-{const sc={'錄取':'#1D9E75','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy(ROWS,'status');new Chart(document.getElementById('byStatus'),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>sc[x[0]]||'#999')}]},options:{...base,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:8}}}}});}
-
-// 熱力圖通用
-function heatmap(elId,rowF,colF,colOrderLevels,insEl,rowLabel,colLabel){
-  const rowKeys=[...new Set(ROWS.map(r=>r[rowF]||'(未填)'))].sort((a,b)=>ROWS.filter(r=>(r[rowF]||'(未填)')===b).length-ROWS.filter(r=>(r[rowF]||'(未填)')===a).length);
-  let colKeys=[...new Set(ROWS.map(r=>r[colF]||'(未填)'))];
-  colKeys=colOrderLevels?orderLevels(colKeys):colKeys.sort();
-  const M={};rowKeys.forEach(rk=>{M[rk]={};colKeys.forEach(ck=>M[rk][ck]=0);});
-  ROWS.forEach(r=>{const rk=r[rowF]||'(未填)',ck=r[colF]||'(未填)';if(M[rk]&&M[rk][ck]!==undefined)M[rk][ck]++;});
-  const rowTot={},colTot={};rowKeys.forEach(rk=>rowTot[rk]=colKeys.reduce((s,ck)=>s+M[rk][ck],0));colKeys.forEach(ck=>colTot[ck]=rowKeys.reduce((s,rk)=>s+M[rk][ck],0));
-  let max=0;rowKeys.forEach(rk=>colKeys.forEach(ck=>{if(M[rk][ck]>max)max=M[rk][ck];}));
-  const cell=n=>{if(!n)return '<td class="z">·</td>';const L=94-(n/max)*54,fg=L<62?'#fff':'#3C3489';return `<td style="background:hsl(252,60%,${L.toFixed(0)}%);color:${fg}">${n}</td>`;};
-  let h=`<table class="hm"><thead><tr><th class="rowh">${rowLabel} ＼ ${colLabel}</th>`+colKeys.map(c=>`<th>${c}</th>`).join('')+`<th class="tot">小計</th></tr></thead><tbody>`;
-  rowKeys.forEach(rk=>{h+=`<tr><th class="rowh">${rk}</th>`+colKeys.map(ck=>cell(M[rk][ck])).join('')+`<td class="tot">${rowTot[rk]}</td></tr>`;});
-  h+=`<tr><th class="rowh tot">小計</th>`+colKeys.map(ck=>`<td class="tot">${colTot[ck]}</td>`).join('')+`<td class="tot">${ROWS.length}</td></tr></tbody></table>`;
-  document.getElementById(elId).innerHTML=h;
-  if(insEl){let best=null;rowKeys.forEach(rk=>colKeys.forEach(ck=>{if(!best||M[rk][ck]>best.v)best={rk,ck,v:M[rk][ck]};}));
-    document.getElementById(insEl).innerHTML=`💡 最集中：<b>${rowLabel}「${best.rk}」× ${colLabel}「${best.ck}」= ${best.v} 筆</b>`;}
-}
-heatmap('hm_ch_lv','channel','level',true,'ins_ch_lv','管道','職等');
-heatmap('hm_fn_lv','func','level',true,null,'職務','職等');
-heatmap('hm_src_lv','src','level',true,null,'來源','職等');
-
-// ⑧ 月趨勢
+{const sc={'錄取':'#1D9E75','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy(ROWS,'status');new Chart(document.getElementById('byStatus'),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>sc[x[0]]||'#999')}]},options:{...base,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:6}}}}});}
+// ⑤ 月趨勢
 {const m={};ROWS.forEach(r=>{const k=r.close_day.slice(0,7);m[k]=(m[k]||0)+1;});const keys=MONTHS.filter(k=>m[k]);
   new Chart(document.getElementById('trend'),{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+
+// 共用：管道列（依總量排序）
+const chOrder=countBy(ROWS,'channel').map(x=>x[0]);
+const legHTML=LEVELS.map(l=>`<span><i style="background:${lvColor(l)}"></i>${l}</span>`).join('');
+document.getElementById('legA').innerHTML=legHTML;
+document.getElementById('legB').innerHTML=legHTML;
+
+// A 案：100% 堆疊橫條
+{
+  const datasets=LEVELS.map(lv=>{
+    const counts=chOrder.map(c=>ROWS.filter(r=>r.channel===c&&r.level===lv).length);
+    const tot=chOrder.map(c=>ROWS.filter(r=>r.channel===c).length);
+    return{label:lv,data:counts.map((n,i)=>tot[i]?+(n/tot[i]*100).toFixed(1):0),_counts:counts,backgroundColor:lvColor(lv),borderRadius:2};
+  });
+  new Chart(document.getElementById('stackA'),{type:'bar',data:{labels:chOrder,datasets},
+    options:{...base,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:it=>`職等 ${it.dataset.label}：${it.dataset._counts[it.dataIndex]} 筆（${it.parsed.x}%）`}}},
+      scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}}}});
+}
+
+// B 案：小倍數圓餅（每管道一個）
+{
+  const host=document.getElementById('smPies');
+  host.innerHTML=chOrder.map((c,i)=>`<div class="sm"><div class="t">${c}</div><div class="box"><canvas id="sm${i}"></canvas></div></div>`).join('');
+  chOrder.forEach((c,i)=>{
+    const e=LEVELS.map(l=>[l,ROWS.filter(r=>r.channel===c&&r.level===l).length]).filter(x=>x[1]>0);
+    new Chart(document.getElementById('sm'+i),{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>lvColor(x[0]))}]},
+      options:{...base,plugins:{legend:{display:false},tooltip:{callbacks:{label:it=>`職等 ${it.label}：${it.parsed} 筆`}}}}});
+  });
+}
 </script>
 </body>
 </html>
