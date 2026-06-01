@@ -1441,11 +1441,9 @@ let vacCharts=[];
 const CHART_PAL=['#7c6cf0','#22c3a6','#f59e0b','#ef4444','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#64748b'];
 // 圖表模式狀態：狀態篩選 + 是否依職等堆疊（預設開啟堆疊，直接看出各維度的職等組成）
 let vacChartStatus='all';   // all | 補缺 | 內轉補缺 | 錄取
-let vacChartByLevel=true;
-let vacChartPct=false;      // 100% 比例堆疊
+let vacChartLevel='all';    // all | 某職等：在長條圖把該職等「亮起來」
 function setVacChartStatus(s){vacChartStatus=s;renderVacChartsInner();}
-function toggleVacChartLevel(on){vacChartByLevel=on;renderVacChartsInner();}
-function toggleVacChartPct(on){vacChartPct=on;renderVacChartsInner();}
+function setVacChartLevel(l){vacChartLevel=l;renderVacChartsInner();}
 // 職等排序：數字 1→n 升序、其他、intern、(未填) 最後
 function orderLevels(levels){
   const num=levels.filter(l=>/^\d+$/.test(l)).sort((a,b)=>(+a)-(+b));
@@ -1474,31 +1472,30 @@ function renderVacChartsInner(){
   const data=vacChartStatus==='all'?allF:allF.filter(v=>v.status===vacChartStatus); // 其餘圖表 + 狀態切換
   const total=data.length,all=S.vacancies.length;
   const note=(vacChartStatus==='all'?'':`狀態「${vacChartStatus}」｜`)+(allF.length===all?`全部 ${all} 筆`:`主篩選後 ${allF.length} / ${all} 筆`)+(vacChartStatus==='all'?'':`，其中 ${total} 筆`);
-  // 職等：固定順序（1→n、intern、未填）＋同色系漸層，切換狀態時顏色固定
+  // 職等：固定順序（1→n、intern、未填）＋同色系漸層
   const LEVELS=orderLevels([...new Set(allF.map(v=>v.level||'(未填)'))]);
   const LVCOLOR=levelColorMap(LEVELS);
-  const byLv=vacChartByLevel&&LEVELS.length>0;
-  // 控制列：狀態 chips + 職等堆疊開關
-  const STS=['all','補缺','內轉補缺','錄取'];
-  const stsBtns=STS.map(s=>`<button onclick="setVacChartStatus('${s}')" style="padding:4px 12px;border-radius:100px;font-size:11px;font-weight:500;cursor:pointer;border:.5px solid ${vacChartStatus===s?'var(--p)':'var(--bdr)'};background:${vacChartStatus===s?'var(--p)':'#fff'};color:${vacChartStatus===s?'#fff':'var(--muted)'}">${s==='all'?'全部':s}</button>`).join('');
-  // Status 分布與月趨勢只在「全部」時顯示（已篩成單一狀態時這兩張意義不大）
+  const lv=vacChartLevel;                         // 'all' 或某職等
+  const lvOn=lv!=='all'&&LEVELS.indexOf(lv)>=0;   // 是否聚焦某職等
   const allOnly=vacChartStatus==='all';
+  // 控制列：狀態 chips + 職等 chips（點職等→長條圖亮起該職等）
+  const chip=(on,label,fn)=>`<button onclick="${fn}" style="padding:4px 12px;border-radius:100px;font-size:11px;font-weight:500;cursor:pointer;border:.5px solid ${on?'var(--p)':'var(--bdr)'};background:${on?'var(--p)':'#fff'};color:${on?'#fff':'var(--muted)'}">${label}</button>`;
+  const stsBtns=['all','補缺','內轉補缺','錄取'].map(s=>chip(vacChartStatus===s,s==='all'?'全部':s,`setVacChartStatus('${s}')`)).join('');
+  const lvBtns=[chip(lv==='all','全部',`setVacChartLevel('all')`)].concat(LEVELS.map(l=>chip(lv===l,l,`setVacChartLevel('${l}')`))).join('');
+  const hl=lvOn?`（職等 ${lv} 亮顯）`:'';
   const panels=[
-    {key:'dept',   title:byLv?'各部門關缺數 × 職等':'各部門關缺數'},
+    {key:'dept',   title:'各部門關缺數'+hl},
     ...(allOnly?[{key:'status',title:'Status 分布'}]:[]),
-    {key:'channel',title:byLv?'招募管道 × 職等':'招募管道分布'},
-    {key:'src',    title:byLv?'來源 × 職等':'來源分布'},
+    {key:'channel',title:'招募管道'+hl},
+    {key:'src',    title:'來源'+hl},
     {key:'level',  title:'職等分布'},
-    ...(allOnly?[{key:'trend',title:byLv?'月趨勢 × 職等（依 Close Day）':'月趨勢（依 Close Day）'}]:[]),
+    {key:'trend',  title:'月趨勢（依 Close Day）'},
   ];
   document.getElementById('chart-body').innerHTML=
     `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">資料範圍：${note}</div>`
-    +`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--bg);border-radius:8px">`
-      +`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;color:var(--muted)">狀態：</span>${stsBtns}</div>`
-      +`<div style="display:flex;align-items:center;gap:14px;margin-left:auto">`
-        +`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer"><input type="checkbox" ${vacChartByLevel?'checked':''} onchange="toggleVacChartLevel(this.checked)" style="cursor:pointer">依職等堆疊</label>`
-        +`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:${vacChartByLevel?'var(--muted)':'#c7c7c7'};cursor:${vacChartByLevel?'pointer':'default'}"><input type="checkbox" ${vacChartPct?'checked':''} ${vacChartByLevel?'':'disabled'} onchange="toggleVacChartPct(this.checked)" style="cursor:inherit">100% 比例</label>`
-      +`</div>`
+    +`<div style="margin-bottom:14px;padding:10px 12px;background:var(--bg);border-radius:8px">`
+      +`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:11px;color:var(--muted);width:32px">狀態</span>${stsBtns}</div>`
+      +`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:11px;color:var(--muted);width:32px">職等</span>${lvBtns}<span style="font-size:10px;color:var(--muted);margin-left:4px">點職等＝在部門/管道/來源長條中亮起該職等</span></div>`
     +`</div>`
     +`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">`
     +panels.map(p=>`<div style="background:var(--bg);border:.5px solid var(--bdr);border-radius:10px;padding:12px 14px">
@@ -1510,50 +1507,34 @@ function renderVacChartsInner(){
   const countBy=(rows,f)=>{const m={};rows.forEach(v=>{const k=(v[f]||'(未填)');m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
   const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:8}}}};
   const mk=(key,cfg)=>{const el=document.getElementById('vchart-'+key);if(el)vacCharts.push(new Chart(el,cfg));};
-  // 依某維度 f 拆成「職等堆疊」資料集（類別依總數由大到小排序）；vacChartPct 時轉成各類別內的百分比
-  const stackByLevel=(rows,f)=>{
-    const cats=countBy(rows,f).map(x=>x[0]);
-    const catTot=cats.map(c=>rows.filter(v=>(v[f]||'(未填)')===c).length);
-    const datasets=LEVELS.map(lv=>{
-      const counts=cats.map(c=>rows.filter(v=>(v[f]||'(未填)')===c&&(v.level||'(未填)')===lv).length);
-      const data=vacChartPct?counts.map((n,i)=>catTot[i]?+(n/catTot[i]*100).toFixed(1):0):counts;
-      return{label:lv,data,_counts:counts,backgroundColor:LVCOLOR[lv],borderRadius:3};
-    });
-    return{labels:cats,datasets};
-  };
-  const stackOpt=(horizontal)=>{
+  // 方式三：總量長條；選某職等時把該職等「亮起」（亮色）＋其餘變灰，總高度不變
+  const focusBar=(f,horizontal)=>{
+    const cats=countBy(data,f).map(x=>x[0]);
+    const tot=cats.map(c=>data.filter(v=>(v[f]||'(未填)')===c).length);
     const va=horizontal?'x':'y';
-    const axes={x:{stacked:true,beginAtZero:true,ticks:{precision:0}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}};
-    if(vacChartPct){axes[va].max=100;axes[va].ticks={callback:(v)=>v+'%'};}
-    return{...base,indexAxis:horizontal?'y':'x',plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{
-      label:(it)=>{const ds=it.dataset;const cnt=ds._counts?ds._counts[it.dataIndex]:Math.round(it.parsed[va]);return vacChartPct?`${ds.label}：${cnt} 筆（${it.parsed[va]}%）`:`${ds.label}：${cnt} 筆`;},
-      footer:(items)=>vacChartPct?'':'合計 '+items.reduce((s,it)=>s+(it.parsed[va]||0),0)+' 筆'
-    }}},scales:axes};
-  };
-  // 各部門關缺數（堆疊：依職等 / 否：單色長條）
-  if(byLv){mk('dept',{type:'bar',data:stackByLevel(data,'dept'),options:stackOpt(false)});}
-  else{const e=countBy(data,'dept');mk('dept',{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#7c6cf0',borderRadius:4}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
-  // Status 分布（圓環，僅「全部」時顯示）
-  if(allOnly){const sc={'錄取':'#22c3a6','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy(allF,'status');mk('status',{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>sc[x[0]]||CHART_PAL[i%CHART_PAL.length])}]},options:base});}
-  // 招募管道（堆疊：依職等 / 否：圓環）
-  if(byLv){mk('channel',{type:'bar',data:stackByLevel(data,'channel'),options:stackOpt(false)});}
-  else{const e=countBy(data,'channel');mk('channel',{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>CHART_PAL[i%CHART_PAL.length])}]},options:base});}
-  // 來源（堆疊橫向：依職等 / 否：橫向長條）
-  if(byLv){mk('src',{type:'bar',data:stackByLevel(data,'src'),options:stackOpt(true)});}
-  else{const e=countBy(data,'src');mk('src',{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#22c3a6',borderRadius:4}]},options:{...base,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
-  // 職等分布（圓環）
-  {const e=countBy(data,'level');mk('level',{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>LVCOLOR[x[0]]||'#64748b')}]},options:base});}
-  // 月趨勢（僅「全部」時顯示）：依職等堆疊＝每月各職等關缺數（堆疊長條）/ 否＝總數折線
-  if(allOnly){
-    const keys=[...new Set(data.filter(v=>v.close_day).map(v=>String(v.close_day).slice(0,7)))].sort();
-    if(byLv){
-      const datasets=LEVELS.map(lv=>({label:lv,data:keys.map(k=>data.filter(v=>v.close_day&&String(v.close_day).slice(0,7)===k&&(v.level||'(未填)')===lv).length),borderColor:LVCOLOR[lv],backgroundColor:LVCOLOR[lv],fill:false,tension:.3,pointRadius:3,borderWidth:2}));
-      mk('trend',{type:'line',data:{labels:keys,datasets},options:{...base,plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12,padding:8}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
-    }else{
-      const m={};data.forEach(v=>{if(v.close_day){const k=String(v.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});
-      mk('trend',{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]||0),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+    if(!lvOn){
+      mk(f,{type:'bar',data:{labels:cats,datasets:[{data:tot,backgroundColor:'#7c6cf0',borderRadius:4}]},
+        options:{...base,indexAxis:horizontal?'y':'x',plugins:{legend:{display:false},tooltip:{callbacks:{label:(it)=>`${it.label}：${it.parsed[va]} 筆`}}},scales:{[va]:{beginAtZero:true,ticks:{precision:0}}}}});
+      return;
     }
-  }
+    const litN=cats.map(c=>data.filter(v=>(v[f]||'(未填)')===c&&(v.level||'(未填)')===lv).length);
+    const restN=cats.map((c,i)=>tot[i]-litN[i]);
+    mk(f,{type:'bar',data:{labels:cats,datasets:[
+        {label:'職等 '+lv,data:litN,backgroundColor:LVCOLOR[lv]||'#7c6cf0',borderRadius:3},
+        {label:'其他職等',data:restN,backgroundColor:'#e5e7eb',borderRadius:3}
+      ]},
+      options:{...base,indexAxis:horizontal?'y':'x',plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{label:(it)=>`${it.dataset.label}：${it.parsed[va]} 筆`,footer:(items)=>'總計 '+items.reduce((s,it)=>s+(it.parsed[va]||0),0)+' 筆'}}},
+        scales:{x:{stacked:true,beginAtZero:true,ticks:{precision:0}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
+  };
+  focusBar('dept',false);
+  focusBar('channel',false);
+  focusBar('src',true);
+  // Status 分布（圓餅圖，僅「全部」時顯示）
+  if(allOnly){const sc={'錄取':'#22c3a6','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy(allF,'status');mk('status',{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>sc[x[0]]||CHART_PAL[i%CHART_PAL.length])}]},options:base});}
+  // 職等分布（圓餅圖；聚焦某職等時把該片拉出強調）
+  {const e=countBy(data,'level');mk('level',{type:'pie',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>LVCOLOR[x[0]]||'#64748b'),offset:e.map(x=>x[0]===lv?18:0)}]},options:base});}
+  // 月趨勢（單純總數折線，不含職等）
+  {const m={};data.forEach(v=>{if(v.close_day){const k=String(v.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});const keys=Object.keys(m).sort();mk('trend',{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]||0),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
 }
 function closeVacCharts(){document.getElementById('chart-modal').classList.remove('open');vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];}
 // 關缺表單下拉選項：資料中既有值 ∪ 常用預設（去重排序）
