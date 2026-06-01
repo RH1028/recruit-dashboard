@@ -157,6 +157,8 @@ tr:last-child td{border-bottom:none}
 /* auth / roles */
 #access-gate{position:fixed;inset:0;background:linear-gradient(135deg,#EEEDFE,#E1F5EE);display:none;align-items:center;justify-content:center;z-index:400}
 #access-gate.open{display:flex}
+/* 設定彈窗需蓋在存取門檻之上，否則被擋住時點「開啟設定」會看不到 */
+#cfg-modal{z-index:500}
 .gate-card{background:#fff;border-radius:16px;padding:30px 28px;width:min(380px,92vw);box-shadow:0 12px 48px rgba(0,0,0,.16);text-align:center}
 .gate-card h2{font-size:18px;font-weight:600;color:var(--pd)}
 .gate-card p{font-size:12px;color:var(--muted);margin:8px 0 18px;line-height:1.7}
