@@ -12,6 +12,11 @@ const VACANCY_SHEET_ID = '1hGbY4FyRjRMpGb1NVj59D7epk7eas7dW-FL0PVHXXas';
 const VACANCY_TABS     = ['AI技術應用組', '工程部', '行銷運營部', '業務部']; // 逐分頁讀取再合併
 const VACANCY_STATUS   = ['錄取', '補缺', '內轉補缺']; // 只取這些 Status
 
+// ── 使用者權限：全部在 Users 分頁設定，前端只在「設定」填一次密碼 ──
+// Users 分頁欄位：account（標籤用）| password（明碼）| role（viewer/editor/admin）| name | active（yes/no）
+// 每次請求帶 pw，後端即時比對 → 對應角色；無效密碼一律擋下（含讀取）。
+const ROLE_RANK = { viewer: 1, editor: 2, admin: 3 };  // 角色階級（數字越大權限越高）
+
 // ── 允許 CORS，讓前端 Dashboard 可以呼叫 ──
 function doGet(e) {
   // 若是直接從編輯器點「執行」誤觸，e 會是 undefined，直接回友善提示
@@ -21,6 +26,10 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.TEXT);
   }
   const action = e.parameter.action;
+  // 讀取也需有效密碼（前端主要走 POST；此處為直接打 URL 的防線）
+  if (!roleForPw(e.parameter.pw)) {
+    return ContentService.createTextOutput(JSON.stringify({ error: '存取密碼無效' })).setMimeType(ContentService.MimeType.JSON);
+  }
   let result;
   try {
     if      (action === 'getTasks')    result = getTasks(e.parameter);
@@ -45,17 +54,30 @@ function doPost(e) {
     return jsonResponse({ error: 'Invalid JSON' });
   }
 
-  // ── 權限驗證：只有寫入 token 符合才允許 ──
-  const settings = getSettings();
-  const validToken = settings['write_token'] || '';
-  if (!body.token || body.token !== validToken) {
-    return jsonResponse({ error: 'Unauthorized' });
+  const action = body.action;
+
+  // ── 以密碼解析角色（明碼比對 Users 分頁）──
+  const who = roleForPw(body.pw);
+
+  // whoami：回傳目前密碼對應的角色（前端開頁判斷用）
+  if (action === 'whoami') {
+    return jsonResponse(who ? { success: true, role: who.role, name: who.name } : { error: '存取密碼無效或未設定' });
+  }
+
+  // 其餘動作一律需有效密碼（含讀取 getAll）
+  if (!who) return jsonResponse({ error: '存取密碼無效，請於右上「設定」填入正確密碼' });
+  const rank = ROLE_RANK[who.role] || 0;
+
+  // 寫入類動作需「編輯」以上權限
+  const EDITOR_ACTIONS = ['upsertTask','deleteTask','upsertVac','deleteVac','upsertPipeline','deletePipeline','upsertLink','updateOKR'];
+  if (EDITOR_ACTIONS.indexOf(action) >= 0 && rank < ROLE_RANK.editor) {
+    return jsonResponse({ error: '權限不足（此操作需要「編輯」以上權限）' });
   }
 
   let result;
   try {
-    const action = body.action;
-    if      (action === 'upsertTask')     result = upsertTask(body.data);
+    if      (action === 'getAll')         result = getAllData();
+    else if (action === 'upsertTask')     result = upsertTask(body.data);
     else if (action === 'deleteTask')     result = deleteTask(body.data);
     else if (action === 'upsertVac')      result = upsertVac(body.data);
     else if (action === 'deleteVac')      result = deleteVac(body.data);
@@ -68,6 +90,38 @@ function doPost(e) {
     result = { error: err.message };
   }
   return jsonResponse(result);
+}
+
+// ============================================================
+//  使用者權限（全部在 Users 分頁設定，明碼密碼）
+// ============================================================
+
+// Users 分頁欄位：account | password | role | name | active
+function getUsers() {
+  return sheetToObjects(SpreadsheetApp.openById(SHEET_ID), 'Users');
+}
+
+// 以明碼密碼解析使用者角色；無效或停用 → null（呼叫端據此完全擋下）
+function roleForPw(pw) {
+  if (!pw) return null;
+  pw = pw.toString();
+  const u = getUsers().filter(function (x) {
+    return (x.password || '').toString() === pw && (x.active || '').toString().toLowerCase() !== 'no';
+  })[0];
+  if (!u) return null;
+  return { role: (u.role || 'viewer').toString().trim(), name: (u.name || u.account || '').toString() };
+}
+
+// 初始化：建立 Users 分頁與預設管理者（在編輯器手動執行一次）
+function setupUsersSheet() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('Users');
+  if (!sheet) sheet = ss.insertSheet('Users');
+  if (sheet.getLastRow() === 0) sheet.getRange(1, 1, 1, 5).setValues([['account', 'password', 'role', 'name', 'active']]);
+  if (!getUsers().filter(function (u) { return (u.account || '') === 'admin'; })[0]) {
+    sheet.appendRow(['admin', 'admin1234', 'admin', '管理者', 'yes']);
+  }
+  return 'Users 分頁已就緒。預設管理者密碼 admin1234（明碼，直接在 Users 分頁改）。角色填 viewer / editor / admin。';
 }
 
 function jsonResponse(obj) {

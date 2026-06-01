@@ -154,6 +154,17 @@ tr:last-child td{border-bottom:none}
 .link-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
 .link-card{background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:12px 14px;cursor:pointer;transition:border-color .12s}
 .link-card:hover{border-color:var(--p)}
+/* auth / roles */
+#access-gate{position:fixed;inset:0;background:linear-gradient(135deg,#EEEDFE,#E1F5EE);display:none;align-items:center;justify-content:center;z-index:400}
+#access-gate.open{display:flex}
+.gate-card{background:#fff;border-radius:16px;padding:30px 28px;width:min(380px,92vw);box-shadow:0 12px 48px rgba(0,0,0,.16);text-align:center}
+.gate-card h2{font-size:18px;font-weight:600;color:var(--pd)}
+.gate-card p{font-size:12px;color:var(--muted);margin:8px 0 18px;line-height:1.7}
+.tuser{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
+.trole{font-size:10px;font-weight:600;padding:2px 8px;border-radius:100px}
+.trole.admin{background:var(--cl);color:var(--cd)}.trole.editor{background:var(--al);color:var(--ad)}.trole.viewer{background:var(--gl);color:var(--gd)}
+/* 檢視權限：隱藏所有新增/儲存/刪除類操作（後端另有強制驗證）*/
+body.viewer-mode .btp,body.viewer-mode .delbtn,body.viewer-mode .addkr{display:none!important}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
@@ -165,8 +176,9 @@ tr:last-child td{border-bottom:none}
       <div class="tlogo">📋 Recruit Dashboard</div>
       <div class="tenv" id="tenv">Demo</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <button class="btn bts" onclick="openCfg()">⚙ 設定</button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="tuser" id="tuser"></span>
+      <button class="btn bts" id="btn-config" onclick="openCfg()">⚙ 設定</button>
     </div>
   </div>
   <div class="main">
@@ -384,9 +396,17 @@ tr:last-child td{border-bottom:none}
   <div class="modal">
     <div class="mhd"><div class="mtitle">⚙ 連線設定</div><button class="xbtn" onclick="document.getElementById('cfg-modal').classList.remove('open')">×</button></div>
     <div class="cfg-row"><label>Apps Script Web App URL</label><input class="ic" id="cfg-url" placeholder="https://script.google.com/macros/s/YOUR_ID/exec"></div>
-    <div class="cfg-row"><label>Write Token</label><input class="ic" id="cfg-tok" type="password"></div>
+    <div class="cfg-row"><label>存取密碼</label><input class="ic" id="cfg-pw" type="password" placeholder="你在 Users 分頁的密碼（填一次即可）"></div>
+    <div class="cfg-note" style="margin-bottom:14px">🔐 權限由後端 Google Sheet 的 <code>Users</code> 分頁控管（明碼密碼對應角色）。沒有有效密碼將無法瀏覽。首次請於 Apps Script 執行一次 <code>setupUsersSheet()</code> 建立分頁。</div>
     <div class="cfg-row"><label>已關缺名單 Sheet URL（選填，可直接嵌入外部 Google Sheet）</label><input class="ic" id="cfg-vac-url" placeholder="https://docs.google.com/spreadsheets/d/..."></div>
-    <button class="btn btp" style="width:100%;margin-top:4px" onclick="saveCfg()">儲存並重新整理</button>
+    <button class="btn" style="width:100%;margin-top:4px;background:var(--p);color:#fff;border-color:var(--p)" onclick="saveCfg()">儲存並重新整理</button>
+  </div>
+</div>
+<div id="access-gate">
+  <div class="gate-card">
+    <h2>🔐 需要存取密碼</h2>
+    <p id="gate-msg">請點下方「開啟設定」，填入 Apps Script URL 與你的存取密碼。<br>密碼由管理者在 Google Sheet 的 Users 分頁設定。</p>
+    <button class="btn" style="width:100%;background:var(--p);color:#fff;border-color:var(--p)" onclick="openCfg()">開啟設定</button>
   </div>
 </div>
 
@@ -394,11 +414,21 @@ tr:last-child td{border-bottom:none}
 const CFG_KEY='recruit_cfg_v5';
 let cfg={};
 try{cfg=JSON.parse(localStorage.getItem(CFG_KEY)||'{}');}catch(e){cfg={};}
-// ?demo=1 強制走 Demo 模式（不影響 localStorage 的真實連線設定，方便預覽）
-const isLive=()=>{
-  try{if(new URLSearchParams(location.search).get('demo')==='1')return false;}catch(e){}
-  return !!(cfg.apiUrl&&cfg.token);
+// 預覽用參數：?demo=1 走 Demo 模式；?role=viewer|editor|admin 以該角色 Demo 預覽（驗收各角色畫面用）
+const _qp=(k)=>{try{return new URLSearchParams(location.search).get(k);}catch(e){return null;}};
+const PREVIEW_ROLE=(()=>{const r=_qp('role');return ['viewer','editor','admin'].indexOf(r)>=0?r:null;})();
+// hasApi：是否走真實後端（demo / 預覽角色時一律 false，不需密碼）
+const hasApi=()=>{
+  if(_qp('demo')==='1'||PREVIEW_ROLE)return false;
+  return !!cfg.apiUrl;
 };
+const isLive=()=>hasApi();
+// ── 使用者權限：角色由後端依「存取密碼」(cfg.accessPw) 解析，存在 session ──
+const ROLE_RANK={viewer:1,editor:2,admin:3};
+let session=null; // {role,name} 或 null（無有效密碼）；demo 模式為 {role:'admin',demo:true}
+const roleRank=()=>ROLE_RANK[session&&session.role]||0;
+const isEditor=()=>roleRank()>=ROLE_RANK.editor;
+const isAdmin=()=>roleRank()>=ROLE_RANK.admin;
 let activePerf=0,activeMbpMember=0,okrLocal={},mbpLocal={},pendingTasks={};
 let dashViewMode='team',dashMbrIdx=0;
 let activeTaskMember=null; // null = 全部
@@ -437,11 +467,11 @@ function getDemoTasks(){
 ];}
 function getDemoVac(){return[
   // Demo 資料模擬外部缺額表（4 部門分頁，Status ∈ 錄取/補缺/內轉補缺）
-  {vac_id:'EXT-1',dept:'行銷運營部',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',channel:'獵頭',src:'LinkedIn',status:'錄取',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-2',dept:'行銷運營部',func:'行銷運營組',level:'P5',grade:'資深專員',biz:'合作夥伴事業群',close_day:'2025-10-09',onboard_day:'2025-10-27',reporter:'王怡方',channel:'內推',src:'員工推薦',status:'補缺',title:'資深行銷運營專員',_source:'external'},
-  {vac_id:'EXT-3',dept:'工程部',func:'後端工程組',level:'P6',grade:'技術主管',biz:'消費事業',close_day:'2026-01-16',onboard_day:'2026-02-23',reporter:'馬筱淳',channel:'主動應徵',src:'104',status:'內轉補缺',title:'後端工程師',_source:'external'},
-  {vac_id:'EXT-4',dept:'AI技術應用組',func:'大數據組',level:'P6',grade:'資深工程師',biz:'部門',close_day:'2024-08-12',onboard_day:'2024-09-18',reporter:'彭聿采',channel:'獵頭',src:'CakeResume',status:'錄取',title:'Big Data Engineer',_source:'external'},
-  {vac_id:'EXT-5',dept:'業務部',func:'業務開發組',level:'P4',grade:'專員',biz:'部門',close_day:'2024-06-25',onboard_day:'2024-10-01',reporter:'廖偉丞',channel:'主動應徵',src:'LinkedIn',status:'補缺',title:'業務開發專員',_source:'external'},
+  {vac_id:'EXT-1',dept:'行銷運營部',func:'行銷運營組',level:'G5',grade:'資深專員',biz:'大眾事業',close_day:'2025-10-25',onboard_day:'2025-12-01',reporter:'呂怡嬅',channel:'獵頭',src:'LinkedIn',status:'錄取',title:'資深行銷運營專員',_source:'external'},
+  {vac_id:'EXT-2',dept:'行銷運營部',func:'行銷運營組',level:'G5',grade:'資深專員',biz:'合作夥伴事業群',close_day:'2025-10-09',onboard_day:'2025-10-27',reporter:'王怡方',channel:'內推',src:'員工推薦',status:'補缺',title:'資深行銷運營專員',_source:'external'},
+  {vac_id:'EXT-3',dept:'工程部',func:'後端工程組',level:'G6',grade:'技術主管',biz:'消費事業',close_day:'2026-01-16',onboard_day:'2026-02-23',reporter:'馬筱淳',channel:'主動應徵',src:'104',status:'內轉補缺',title:'後端工程師',_source:'external'},
+  {vac_id:'EXT-4',dept:'AI技術應用組',func:'大數據組',level:'G6',grade:'資深工程師',biz:'部門',close_day:'2024-08-12',onboard_day:'2024-09-18',reporter:'彭聿采',channel:'獵頭',src:'CakeResume',status:'錄取',title:'Big Data Engineer',_source:'external'},
+  {vac_id:'EXT-5',dept:'業務部',func:'業務開發組',level:'G4',grade:'專員',biz:'部門',close_day:'2024-06-25',onboard_day:'2024-10-01',reporter:'廖偉丞',channel:'主動應徵',src:'LinkedIn',status:'補缺',title:'業務開發專員',_source:'external'},
 ];}
 
 function getDemoPipeline(){return[
@@ -466,9 +496,10 @@ window.addEventListener('load',async()=>{
   S.tasks=getDemoTasks();S.vacancies=getDemoVac();// S.pipeline starts empty - add via + 新增候選人
   S.links=getDemoLinks();
   initYearToCurrent(); // 開頁預設年度＝今年
-  if(isLive()){
+  await resolveRole(); // 依 cfg.accessPw 解析角色（demo 無 api → admin 預覽）
+  if(isLive()&&session){
     try{
-      const d=await apiGet({action:'getAll'});
+      const d=await apiPost({action:'getAll'});
       if(d&&!d.error){
         Object.assign(S,{tasks:d.tasks||S.tasks,vacancies:d.vacancies||S.vacancies,pipeline:d.pipeline||S.pipeline,members:d.members||DEMO_MEMBERS,settings:d.settings||DEMO_SETTINGS,okr:d.okr||[],mbp:d.mbp||[],links:d.links||S.links,demo:false});
         const tenv=document.getElementById('tenv');
@@ -479,17 +510,18 @@ window.addEventListener('load',async()=>{
   if(S.demo){
     try{document.getElementById('banner').style.display='flex';}catch(e){}
   }
+  applyRoleUI();
   try{renderAll();}catch(e){console.error('renderAll error:',e);}
 });
 
 window.lastApiError=null;
-async function apiGet(p={}){if(!isLive())return null;try{const url=new URL(cfg.apiUrl);Object.entries(p).forEach(([k,v])=>url.searchParams.set(k,v));const j=await(await fetch(url.toString())).json();console.log('[apiGet]',p,'→',j);return j;}catch(e){console.error('[apiGet] fetch/parse error',p,e);return null;}}
+// 共用 POST：自動帶上存取密碼 pw
 async function apiPost(b){
   if(!isLive())return null;
   window.lastApiError=null;
   let resp,txt;
   try{
-    resp=await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({token:cfg.token,...b})});
+    resp=await fetch(cfg.apiUrl,{method:'POST',body:JSON.stringify({pw:cfg.accessPw||'',...b})});
   }catch(e){
     window.lastApiError='fetch 拋例外：'+(e.message||e);
     console.error('[apiPost] fetch threw:',e);return null;
@@ -506,13 +538,22 @@ async function apiPost(b){
     console.error('[apiPost] not JSON. Status:',resp.status,'URL:',resp.url,'Body:',txt.slice(0,500));return null;
   }
 }
+// 用存取密碼向後端解析角色；demo 無 api → admin 預覽；無/錯密碼 → null（之後整頁擋住）
+async function resolveRole(){
+  if(!hasApi()){const role=PREVIEW_ROLE||'admin';session={role,name:'Demo（'+role+'）',demo:true};return;}
+  if(!cfg.accessPw){session=null;return;}
+  const r=await apiPost({action:'whoami'});
+  session=(r&&r.success)?{role:r.role,name:r.name}:null;
+}
 async function loadData(){
   if(!isLive()){
     S.tasks=getDemoTasks();S.vacancies=getDemoVac();
     renderAll();return;
   }
+  await resolveRole();
+  if(!session){applyRoleUI();showToast('存取密碼無效，請於設定重新填寫',true);return;}
   try{
-    const d=await apiGet({action:'getAll'});
+    const d=await apiPost({action:'getAll'});
     if(d&&!d.error){
       Object.assign(S,{
         tasks:d.tasks||[],
@@ -527,7 +568,7 @@ async function loadData(){
       });
       // 清掉本地 OKR/MBP 編輯快取，讓畫面用 sheet 最新資料重建
       okrLocal={};mbpLocal={};
-      renderAll();showToast('資料已載入');
+      applyRoleUI();renderAll();showToast('資料已載入');
     }else throw new Error(d&&d.error?d.error:'no data');
   }catch(e){showToast('連線失敗：'+(e.message||e),true);}
 }
@@ -1227,7 +1268,7 @@ function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
     <div><div class="ml">部門</div><input class="ic" id="nv-dept" list="nv-dept-dl" placeholder="選擇或自行輸入"><datalist id="nv-dept-dl">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option value="${d}">`).join('')}</datalist></div>
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
-    <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
+    <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="G3 / G5"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
     <div><div class="ml">事業</div><select class="ic" id="nv-biz">${vacFieldOptions('biz','')}</select></div>
     <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
@@ -1396,35 +1437,85 @@ function getFilteredVacancies(){
 // ══ 關缺圖表呈現 ══
 let vacCharts=[];
 const CHART_PAL=['#7c6cf0','#22c3a6','#f59e0b','#ef4444','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#64748b'];
+// 圖表模式狀態：狀態篩選 + 是否依職等堆疊（預設開啟堆疊，直接看出各維度的職等組成）
+let vacChartStatus='all';   // all | 補缺 | 內轉補缺 | 錄取
+let vacChartByLevel=true;
+function setVacChartStatus(s){vacChartStatus=s;renderVacChartsInner();}
+function toggleVacChartLevel(on){vacChartByLevel=on;renderVacChartsInner();}
 function openVacCharts(){
   if(typeof Chart==='undefined'){alert('圖表元件尚在載入（需連網），請稍候再試一次。');return;}
-  const data=getFilteredVacancies();
-  const total=data.length,all=S.vacancies.length;
-  const note=total===all?`全部 ${total} 筆`:`篩選後 ${total} / ${all} 筆`;
-  const titles=['各部門關缺數','Status 分布','招募管道分布','來源分布','月趨勢（依 Close Day）'];
-  document.getElementById('chart-body').innerHTML=
-    `<div style="font-size:11px;color:var(--muted);margin-bottom:14px">資料範圍：${note}（圖表反映目前篩選條件）</div>`
-    +`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">`
-    +titles.map((t,i)=>`<div style="background:var(--bg);border:.5px solid var(--bdr);border-radius:10px;padding:12px 14px">
-        <div style="font-size:12px;font-weight:600;margin-bottom:10px">${t}</div>
-        <div style="position:relative;height:240px"><canvas id="vchart${i}"></canvas></div></div>`).join('')
-    +`</div>`;
   document.getElementById('chart-modal').classList.add('open');
+  renderVacChartsInner();
+}
+function renderVacChartsInner(){
+  const allF=getFilteredVacancies();                       // 主篩選列結果（Status 分布用，不受狀態切換影響）
+  const data=vacChartStatus==='all'?allF:allF.filter(v=>v.status===vacChartStatus); // 其餘圖表 + 狀態切換
+  const total=data.length,all=S.vacancies.length;
+  const note=(vacChartStatus==='all'?'':`狀態「${vacChartStatus}」｜`)+(allF.length===all?`全部 ${all} 筆`:`主篩選後 ${allF.length} / ${all} 筆`)+(vacChartStatus==='all'?'':`，其中 ${total} 筆`);
+  // 職等色彩：以「主篩選後」全部資料的職等集合排序，確保切換狀態時同一職等顏色固定
+  const LEVELS=[...new Set(allF.map(v=>v.level||'(未填)'))].sort();
+  const LVCOLOR={};LEVELS.forEach((lv,i)=>LVCOLOR[lv]=CHART_PAL[i%CHART_PAL.length]);
+  const byLv=vacChartByLevel&&LEVELS.length>0;
+  // 控制列：狀態 chips + 職等堆疊開關
+  const STS=['all','補缺','內轉補缺','錄取'];
+  const stsBtns=STS.map(s=>`<button onclick="setVacChartStatus('${s}')" style="padding:4px 12px;border-radius:100px;font-size:11px;font-weight:500;cursor:pointer;border:.5px solid ${vacChartStatus===s?'var(--p)':'var(--bdr)'};background:${vacChartStatus===s?'var(--p)':'#fff'};color:${vacChartStatus===s?'#fff':'var(--muted)'}">${s==='all'?'全部':s}</button>`).join('');
+  // Status 分布與月趨勢只在「全部」時顯示（已篩成單一狀態時這兩張意義不大）
+  const allOnly=vacChartStatus==='all';
+  const panels=[
+    {key:'dept',   title:byLv?'各部門關缺數 × 職等':'各部門關缺數'},
+    ...(allOnly?[{key:'status',title:'Status 分布'}]:[]),
+    {key:'channel',title:byLv?'招募管道 × 職等':'招募管道分布'},
+    {key:'src',    title:byLv?'來源 × 職等':'來源分布'},
+    {key:'level',  title:'職等分布'},
+    ...(allOnly?[{key:'trend',title:byLv?'月趨勢 × 職等（依 Close Day）':'月趨勢（依 Close Day）'}]:[]),
+  ];
+  document.getElementById('chart-body').innerHTML=
+    `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">資料範圍：${note}</div>`
+    +`<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px;padding:10px 12px;background:var(--bg);border-radius:8px">`
+      +`<div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;color:var(--muted)">狀態：</span>${stsBtns}</div>`
+      +`<label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin-left:auto"><input type="checkbox" ${vacChartByLevel?'checked':''} onchange="toggleVacChartLevel(this.checked)" style="cursor:pointer">依職等堆疊呈現</label>`
+    +`</div>`
+    +`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">`
+    +panels.map(p=>`<div style="background:var(--bg);border:.5px solid var(--bdr);border-radius:10px;padding:12px 14px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px">${p.title}</div>
+        <div style="position:relative;height:240px"><canvas id="vchart-${p.key}"></canvas></div></div>`).join('')
+    +`</div>`;
   vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];
   if(!total){document.querySelectorAll('#chart-body canvas').forEach(c=>{c.parentNode.innerHTML='<div style="color:var(--muted);font-size:12px;text-align:center;padding:50px 0">無符合條件的資料</div>';});return;}
-  const countBy=(f)=>{const m={};data.forEach(v=>{const k=(v[f]||'(未填)');m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
+  const countBy=(rows,f)=>{const m={};rows.forEach(v=>{const k=(v[f]||'(未填)');m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
   const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:12,padding:8}}}};
-  const mk=(i,cfg)=>vacCharts.push(new Chart(document.getElementById('vchart'+i),cfg));
-  // 1 各部門關缺數（長條）
-  {const e=countBy('dept');mk(0,{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#7c6cf0',borderRadius:4}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
-  // 2 Status 分布（圓環）
-  {const sc={'錄取':'#22c3a6','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy('status');mk(1,{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>sc[x[0]]||CHART_PAL[i%CHART_PAL.length])}]},options:base});}
-  // 3 招募管道（圓環）
-  {const e=countBy('channel');mk(2,{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>CHART_PAL[i%CHART_PAL.length])}]},options:base});}
-  // 4 來源（橫向長條）
-  {const e=countBy('src');mk(3,{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#22c3a6',borderRadius:4}]},options:{...base,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
-  // 5 月趨勢（折線，依 close_day 的 YYYY-MM）
-  {const m={};data.forEach(v=>{if(v.close_day){const k=String(v.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});const keys=Object.keys(m).sort();mk(4,{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+  const mk=(key,cfg)=>{const el=document.getElementById('vchart-'+key);if(el)vacCharts.push(new Chart(el,cfg));};
+  // 依某維度 f 拆成「職等堆疊」資料集（類別依總數由大到小排序）
+  const stackByLevel=(rows,f)=>{
+    const cats=countBy(rows,f).map(x=>x[0]);
+    const datasets=LEVELS.map(lv=>({label:lv,data:cats.map(c=>rows.filter(v=>(v[f]||'(未填)')===c&&(v.level||'(未填)')===lv).length),backgroundColor:LVCOLOR[lv],borderRadius:3}));
+    return{labels:cats,datasets};
+  };
+  const stackOpt=(horizontal)=>({...base,indexAxis:horizontal?'y':'x',plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12,padding:8}},tooltip:{callbacks:{footer:(items)=>'合計 '+items.reduce((s,it)=>s+(it.parsed[horizontal?'x':'y']||0),0)}}},scales:{x:{stacked:true,beginAtZero:true,ticks:{precision:0}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}});
+  // 各部門關缺數（堆疊：依職等 / 否：單色長條）
+  if(byLv){mk('dept',{type:'bar',data:stackByLevel(data,'dept'),options:stackOpt(false)});}
+  else{const e=countBy(data,'dept');mk('dept',{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#7c6cf0',borderRadius:4}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});}
+  // Status 分布（圓環，僅「全部」時顯示）
+  if(allOnly){const sc={'錄取':'#22c3a6','補缺':'#7c6cf0','內轉補缺':'#f59e0b'};const e=countBy(allF,'status');mk('status',{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>sc[x[0]]||CHART_PAL[i%CHART_PAL.length])}]},options:base});}
+  // 招募管道（堆疊：依職等 / 否：圓環）
+  if(byLv){mk('channel',{type:'bar',data:stackByLevel(data,'channel'),options:stackOpt(false)});}
+  else{const e=countBy(data,'channel');mk('channel',{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map((x,i)=>CHART_PAL[i%CHART_PAL.length])}]},options:base});}
+  // 來源（堆疊橫向：依職等 / 否：橫向長條）
+  if(byLv){mk('src',{type:'bar',data:stackByLevel(data,'src'),options:stackOpt(true)});}
+  else{const e=countBy(data,'src');mk('src',{type:'bar',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:'#22c3a6',borderRadius:4}]},options:{...base,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,ticks:{precision:0}}}}});}
+  // 職等分布（圓環）
+  {const e=countBy(data,'level');mk('level',{type:'doughnut',data:{labels:e.map(x=>x[0]),datasets:[{data:e.map(x=>x[1]),backgroundColor:e.map(x=>LVCOLOR[x[0]]||'#64748b')}]},options:base});}
+  // 月趨勢（僅「全部」時顯示）：依職等堆疊＝每月各職等關缺數（堆疊長條）/ 否＝總數折線
+  if(allOnly){
+    const keys=[...new Set(data.filter(v=>v.close_day).map(v=>String(v.close_day).slice(0,7)))].sort();
+    if(byLv){
+      const datasets=LEVELS.map(lv=>({label:lv,data:keys.map(k=>data.filter(v=>v.close_day&&String(v.close_day).slice(0,7)===k&&(v.level||'(未填)')===lv).length),borderColor:LVCOLOR[lv],backgroundColor:LVCOLOR[lv],fill:false,tension:.3,pointRadius:3,borderWidth:2}));
+      mk('trend',{type:'line',data:{labels:keys,datasets},options:{...base,plugins:{legend:{display:true,labels:{font:{size:10},boxWidth:12,padding:8}}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+    }else{
+      const m={};data.forEach(v=>{if(v.close_day){const k=String(v.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});
+      mk('trend',{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]||0),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},options:{...base,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+    }
+  }
 }
 function closeVacCharts(){document.getElementById('chart-modal').classList.remove('open');vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];}
 // 關缺表單下拉選項：資料中既有值 ∪ 常用預設（去重排序）
@@ -1579,7 +1670,7 @@ function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
     <div><div class="ml">部門</div><input class="ic" id="nv-dept" list="nv-dept-dl" placeholder="選擇或自行輸入"><datalist id="nv-dept-dl">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option value="${d}">`).join('')}</datalist></div>
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
-    <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="P5 / P6"></div>
+    <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="G3 / G5"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
     <div><div class="ml">事業</div><select class="ic" id="nv-biz">${vacFieldOptions('biz','')}</select></div>
     <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
@@ -1674,9 +1765,27 @@ function rebuildDashChips(){
 }
 function openMdl(title,html){document.getElementById('mtitle').textContent=title;document.getElementById('mbody').innerHTML=html;document.getElementById('modal').classList.add('open');}
 function closeMdl(e){if(e&&e.target!==document.getElementById('modal'))return;document.getElementById('modal').classList.remove('open');}
-function openCfg(){document.getElementById('cfg-url').value=cfg.apiUrl||'';document.getElementById('cfg-tok').value=cfg.token||'';document.getElementById('cfg-vac-url').value=cfg.vacUrl||'';document.getElementById('cfg-modal').classList.add('open');}
-function saveCfg(){cfg.apiUrl=document.getElementById('cfg-url').value.trim();cfg.token=document.getElementById('cfg-tok').value.trim();cfg.vacUrl=document.getElementById('cfg-vac-url').value.trim();try{localStorage.setItem(CFG_KEY,JSON.stringify(cfg));}catch(e){}location.reload();}
+function openCfg(){document.getElementById('cfg-url').value=cfg.apiUrl||'';document.getElementById('cfg-pw').value=cfg.accessPw||'';document.getElementById('cfg-vac-url').value=cfg.vacUrl||'';document.getElementById('cfg-modal').classList.add('open');}
+function saveCfg(){cfg.apiUrl=document.getElementById('cfg-url').value.trim();cfg.accessPw=document.getElementById('cfg-pw').value;cfg.vacUrl=document.getElementById('cfg-vac-url').value.trim();try{localStorage.setItem(CFG_KEY,JSON.stringify(cfg));}catch(e){}location.reload();}
 let _tt;function showToast(msg,err=false){const el=document.getElementById('toast');el.textContent=msg;el.className='toast show'+(err?' err':'');clearTimeout(_tt);_tt=setTimeout(()=>el.className='toast',3000);}
+
+// ══ 權限介面套用 ══
+// 檢視者隱藏新增/儲存/刪除；無有效角色（已連線但無/錯密碼）整頁擋住
+function applyRoleUI(){
+  document.body.classList.toggle('viewer-mode',!isEditor());
+  const tu=document.getElementById('tuser');
+  if(session&&session.role){
+    const rl={admin:'管理者',editor:'編輯',viewer:'檢視'}[session.role]||session.role;
+    if(tu)tu.innerHTML=`👤 ${esc(session.name||'')} <span class="trole ${esc(session.role)}">${rl}</span>`;
+  }else if(tu)tu.innerHTML='';
+  // 存取門檻
+  const gate=document.getElementById('access-gate'),gm=document.getElementById('gate-msg');
+  const blocked=hasApi()&&!session;
+  if(gm)gm.innerHTML=(cfg.accessPw
+      ? '存取密碼無效或帳號已停用。請點「開啟設定」重新填寫，或洽管理者確認 Google Sheet 的 Users 分頁。'
+      : '請點下方「開啟設定」，填入 Apps Script URL 與你的存取密碼。<br>密碼由管理者在 Google Sheet 的 Users 分頁設定。');
+  if(gate)gate.classList.toggle('open',blocked);
+}
 </script>
 </body>
 </html>
