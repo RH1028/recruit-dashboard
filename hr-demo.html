@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR Head 視角 — 關缺圖表 Demo</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--p:#7F77DD;--pd:#3C3489;--t:#1D9E75;--a:#BA7517;--bg:#F7F6F3;--surf:#fff;--bdr:rgba(0,0,0,.1);--text:#1A1A1A;--muted:#6B6A66;
+  font-family:-apple-system,'Helvetica Neue',Arial,sans-serif;}
+body{background:var(--bg);color:var(--text);padding:26px;font-size:14px;line-height:1.5;max-width:1080px;margin:0 auto}
+h1{font-size:20px;color:var(--pd)}
+.sub{font-size:12px;color:var(--muted);margin:4px 0 20px}
+.card{background:var(--surf);border:.5px solid var(--bdr);border-radius:12px;padding:18px 20px;margin-bottom:18px}
+.ctitle{font-size:15px;font-weight:600;margin-bottom:3px}
+.cnote{font-size:12px;color:var(--muted);margin-bottom:14px}
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.kpi{background:var(--bg);border-radius:10px;padding:12px 14px}
+.kpi .l{font-size:11px;color:var(--muted)}
+.kpi .v{font-size:24px;font-weight:700;margin-top:2px}
+.kpi .s{font-size:11px;color:var(--muted);margin-top:1px}
+/* controls */
+.ctrl{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:14px;padding:10px 12px;background:var(--bg);border-radius:8px}
+.ctrl label{font-size:11px;color:var(--muted);margin-right:5px}
+select{font-size:12px;padding:4px 8px;border:.5px solid var(--bdr);border-radius:6px;background:#fff;cursor:pointer;font-family:inherit}
+.seg{display:inline-flex;border:.5px solid var(--bdr);border-radius:7px;overflow:hidden}
+.seg button{font-size:11px;padding:4px 11px;border:none;background:#fff;cursor:pointer;color:var(--muted)}
+.seg button.on{background:var(--p);color:#fff}
+/* heatmap */
+table.hm{border-collapse:separate;border-spacing:3px;width:100%}
+table.hm th{font-size:11px;color:var(--muted);font-weight:600;padding:4px 6px;text-align:center;white-space:nowrap}
+table.hm th.rowh{text-align:right;min-width:84px;max-width:140px}
+table.hm td{height:38px;text-align:center;font-size:12px;font-weight:600;border-radius:7px;color:#fff;min-width:42px}
+table.hm td.z{color:#cbd5e1;background:#f3f2ee!important;font-weight:400}
+table.hm td.tot,table.hm th.tot{background:#eceaf6;color:var(--pd);font-weight:700}
+.legend{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:var(--muted)}
+.bar{height:12px;width:150px;border-radius:6px;background:linear-gradient(90deg,#f0eefb,#7F77DD,#3C3489)}
+.chartbox{position:relative;height:230px}
+.hint{font-size:11px;color:var(--muted);margin-top:12px;padding:10px 12px;background:var(--bg);border-radius:8px;line-height:1.7}
+.hint b{color:var(--pd)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<h1>📊 關缺圖表 — HR Head 視角 Demo</h1>
+<div class="sub">範例資料 120 筆。核心是「可自選維度的交叉熱力圖」，用來看 職務／管道／來源／職等 之間的相關性。</div>
+
+<!-- KPI -->
+<div class="card">
+  <div class="ctitle">重點數字</div>
+  <div class="cnote">先看量體與結果（會跟著下方的 Status 篩選連動）。</div>
+  <div class="kpis" id="kpis"></div>
+</div>
+
+<!-- Pivot heatmap -->
+<div class="card">
+  <div class="ctitle">交叉相關熱力圖（樞紐）</div>
+  <div class="cnote">自由選「列 × 欄」兩個維度，格子＝筆數、底色越深越集中。看一<b>欄</b>＝該值在各列的分布；看一<b>列</b>＝該值的組成。</div>
+  <div class="ctrl">
+    <div><label>列（Row）</label><select id="rowDim"></select></div>
+    <div><label>欄（Col）</label><select id="colDim"></select></div>
+    <div><label>數值</label><span class="seg" id="modeSeg">
+      <button data-m="count" class="on">數量</button><button data-m="pct">各列占比%</button></span></div>
+    <div><label>Status</label><select id="stFilter">
+      <option value="all">全部</option><option>補缺</option><option>錄取</option><option>內轉補缺</option></select></div>
+  </div>
+  <div style="overflow-x:auto"><div id="hm"></div></div>
+  <div class="legend"><span>少</span><div class="bar"></div><span>多</span><span style="margin-left:12px">· = 0</span></div>
+  <div class="hint" id="insight"></div>
+</div>
+
+<!-- Trend -->
+<div class="card">
+  <div class="ctitle">月趨勢（依 Close Day）</div>
+  <div class="cnote">關缺量隨時間的變化（跟著 Status 篩選連動）。</div>
+  <div class="chartbox"><canvas id="trend"></canvas></div>
+</div>
+
+<script>
+// ── 範例資料（含相關性：獵頭→高職等、104→低職等、校園→intern、內轉→內轉補缺…）──
+const FUNCS={'後端工程':'工程部','前端工程':'工程部','資料科學':'AI技術應用組','產品經理':'產品部','行銷企劃':'行銷運營部','業務開發':'業務部','人資':'人力資源部','UI/UX 設計':'產品部'};
+const FN=Object.keys(FUNCS);
+const RULES={
+ 'LinkedIn':{lv:['3','3','4','4','5'],src:['主投','主投','官網'],st:['錄取','補缺','錄取']},
+ '104':{lv:['1','2','2','3','intern'],src:['主投','官網'],st:['補缺','錄取','補缺']},
+ '內部推薦':{lv:['2','3','3','4'],src:['員工推薦','同事'],st:['補缺','錄取']},
+ '獵頭':{lv:['4','5','5','6'],src:['獵才_Lydia','獵才_Johnny'],st:['錄取','錄取','補缺']},
+ '校園招募':{lv:['intern','intern','1'],src:['台灣大學','官網'],st:['錄取','補缺']},
+ '內轉':{lv:['2','3','4'],src:['同事','員工推薦'],st:['內轉補缺','內轉補缺']},
+};
+const CH=Object.keys(RULES);
+const MONTHS=['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02','2026-03'];
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const ROWS=[];
+for(let i=0;i<120;i++){
+  const ch=pick(CH),r=RULES[ch],fn=pick(FN),cm=pick(MONTHS);
+  ROWS.push({func:fn,dept:FUNCS[fn],channel:ch,src:pick(r.src),level:pick(r.lv),status:pick(r.st),
+    close_day:cm+'-'+String(5+Math.floor(Math.random()*20)).padStart(2,'0'),days:18+Math.floor(Math.random()*40)});
+}
+
+const DIMS=[['職務','func'],['管道','channel'],['來源','src'],['職等','level'],['部門','dept'],['Status','status']];
+function orderLevels(ks){const num=ks.filter(k=>/^\d+$/.test(k)).sort((a,b)=>a-b);const it=ks.filter(k=>/intern/i.test(k));const ot=ks.filter(k=>num.indexOf(k)<0&&it.indexOf(k)<0).sort();return[...num,...ot,...it];}
+
+let mode='count';
+function filtered(){const s=document.getElementById('stFilter').value;return s==='all'?ROWS:ROWS.filter(r=>r.status===s);}
+
+function renderKPI(){
+  const R=filtered();const n=R.length;
+  const by=s=>R.filter(r=>r.status===s).length;
+  const pct=x=>n?Math.round(x/n*100):0;
+  const avg=n?Math.round(R.reduce((s,r)=>s+r.days,0)/n):0;
+  const kp=[
+    ['總關缺數',n,''],
+    ['錄取',by('錄取'),pct(by('錄取'))+'%'],
+    ['補缺',by('補缺'),pct(by('補缺'))+'%'],
+    ['內轉補缺',by('內轉補缺'),pct(by('內轉補缺'))+'%'],
+    ['平均報到天數',avg+' 天','Close → 報到'],
+  ];
+  document.getElementById('kpis').innerHTML=kp.map(k=>`<div class="kpi"><div class="l">${k[0]}</div><div class="v">${k[1]}</div><div class="s">${k[2]}</div></div>`).join('');
+}
+
+function renderHeatmap(){
+  const R=filtered();
+  const rd=document.getElementById('rowDim').value, cd=document.getElementById('colDim').value;
+  const rf=DIMS.find(d=>d[0]===rd)[1], cf=DIMS.find(d=>d[0]===cd)[1];
+  let rowKeys=[...new Set(R.map(r=>r[rf]||'(未填)'))];
+  let colKeys=[...new Set(R.map(r=>r[cf]||'(未填)'))];
+  rowKeys = rd==='職等'?orderLevels(rowKeys):rowKeys.sort((a,b)=>R.filter(r=>(r[rf]||'(未填)')===b).length-R.filter(r=>(r[rf]||'(未填)')===a).length);
+  colKeys = cd==='職等'?orderLevels(colKeys):colKeys.sort((a,b)=>R.filter(r=>(r[cf]||'(未填)')===b).length-R.filter(r=>(r[cf]||'(未填)')===a).length);
+  const M={};rowKeys.forEach(rk=>{M[rk]={};colKeys.forEach(ck=>M[rk][ck]=0);});
+  R.forEach(r=>{const rk=r[rf]||'(未填)',ck=r[cf]||'(未填)';if(M[rk]&&M[rk][ck]!==undefined)M[rk][ck]++;});
+  const rowTot={};rowKeys.forEach(rk=>rowTot[rk]=colKeys.reduce((s,ck)=>s+M[rk][ck],0));
+  const colTot={};colKeys.forEach(ck=>colTot[ck]=rowKeys.reduce((s,rk)=>s+M[rk][ck],0));
+  // 色階最大值
+  let max=0;rowKeys.forEach(rk=>colKeys.forEach(ck=>{const v=mode==='pct'?(rowTot[rk]?M[rk][ck]/rowTot[rk]*100:0):M[rk][ck];if(v>max)max=v;}));
+  const cell=(v,raw)=>{
+    if(!raw)return '<td class="z">·</td>';
+    const t=max?v/max:0,L=94-t*54,fg=L<62?'#fff':'#3C3489';
+    const txt=mode==='pct'?Math.round(v)+'%':raw;
+    return `<td style="background:hsl(252,60%,${L.toFixed(0)}%);color:${fg}" title="${raw} 筆">${txt}</td>`;
+  };
+  let h=`<table class="hm"><thead><tr><th class="rowh">${rd} ＼ ${cd}</th>`+colKeys.map(ck=>`<th>${ck}</th>`).join('')+`<th class="tot">小計</th></tr></thead><tbody>`;
+  rowKeys.forEach(rk=>{
+    h+=`<tr><th class="rowh">${rk}</th>`+colKeys.map(ck=>{
+      const raw=M[rk][ck];const v=mode==='pct'?(rowTot[rk]?raw/rowTot[rk]*100:0):raw;return cell(v,raw);
+    }).join('')+`<td class="tot">${rowTot[rk]}</td></tr>`;
+  });
+  h+=`<tr><th class="rowh tot">小計</th>`+colKeys.map(ck=>`<td class="tot">${colTot[ck]}</td>`).join('')+`<td class="tot">${R.length}</td></tr>`;
+  h+='</tbody></table>';
+  document.getElementById('hm').innerHTML=h;
+
+  // 自動洞察：找最熱的格子
+  let best=null;rowKeys.forEach(rk=>colKeys.forEach(ck=>{if(!best||M[rk][ck]>best.v)best={rk,ck,v:M[rk][ck]};}));
+  document.getElementById('insight').innerHTML= best&&best.v>0
+    ? `💡 目前最集中：<b>${rd}「${best.rk}」× ${cd}「${best.ck}」= ${best.v} 筆</b>。切換「各列占比%」可看每一列的內部結構（例如每個管道各職等占比）。`
+    : '無資料。';
+}
+
+let trendChart=null;
+function renderTrend(){
+  const R=filtered();const m={};R.forEach(r=>{const k=r.close_day.slice(0,7);m[k]=(m[k]||0)+1;});
+  const keys=MONTHS.filter(k=>m[k]!==undefined);
+  if(trendChart)trendChart.destroy();
+  trendChart=new Chart(document.getElementById('trend'),{type:'line',
+    data:{labels:keys,datasets:[{data:keys.map(k=>m[k]||0),borderColor:'#7c6cf0',backgroundColor:'rgba(124,108,240,.15)',fill:true,tension:.3,pointRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{precision:0}}}}});
+}
+
+function renderAll(){renderKPI();renderHeatmap();renderTrend();}
+
+// init controls
+const rowSel=document.getElementById('rowDim'),colSel=document.getElementById('colDim');
+DIMS.forEach(d=>{rowSel.add(new Option(d[0],d[0]));colSel.add(new Option(d[0],d[0]));});
+rowSel.value='管道';colSel.value='職等';   // 預設：管道 × 職等
+rowSel.onchange=colSel.onchange=renderHeatmap;
+document.getElementById('stFilter').onchange=renderAll;
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{
+  mode=b.dataset.m;document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x===b));renderHeatmap();
+});
+renderAll();
+</script>
+</body>
+</html>
