@@ -496,28 +496,38 @@ let _demoVacCache=null;
 function getDemoVac(){
   if(_demoVacCache)return _demoVacCache.map(v=>({...v}));   // 一次性生成、整個 session 穩定
   // 部門→職能（AI技術應用組、人力資源部 故意留空，展示「職能空白自動以部門補值」）
-  const DEPTS=[['工程部',['後端工程','前端工程','資料工程']],['行銷運營部',['行銷企劃','社群運營','內容企劃']],['業務部',['業務開發','客戶經營']],['產品部',['產品經理','UI/UX 設計']],['AI技術應用組',[]],['人力資源部',[]]];
-  // 管道→職等/來源（製造相關性：獵頭偏資深、104偏基層、校園偏 intern）
-  const RULES={'104':{lv:['1','2','2','3'],src:['主投','官網']},'LinkedIn':{lv:['3','4','4','5'],src:['主投','獵才_Lydia']},'內部推薦':{lv:['2','3','3','4'],src:['員工推薦','同事']},'獵頭':{lv:['5','5','6'],src:['獵才_Lydia','獵才_Johnny']},'校園招募':{lv:['1','intern','intern'],src:['台灣大學','官網']}};
-  const CHS=Object.keys(RULES),MON=['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02'],REP=['呂怡嬅','王怡方','馬筱淳','彭聿采','廖偉丞'];
+  const FUNCS={'工程部':['後端工程','前端工程','資料工程'],'行銷運營部':['行銷企劃','社群運營','內容企劃'],'業務部':['業務開發','客戶經營'],'產品部':['產品經理','UI/UX 設計'],'AI技術應用組':[],'人力資源部':[]};
+  // 部門/管道 加權池：製造極端值（工程部、104/LinkedIn 量大；獵頭、校園、人資 稀少）
+  const DEPT_POOL=['工程部','工程部','工程部','工程部','工程部','行銷運營部','行銷運營部','行銷運營部','業務部','業務部','產品部','產品部','AI技術應用組','AI技術應用組','人力資源部'];
+  const CH_POOL=['104','104','104','104','104','LinkedIn','LinkedIn','LinkedIn','LinkedIn','內部推薦','內部推薦','獵頭','校園招募'];
+  // 管道→職等/來源相關性（獵頭偏資深、104偏基層、校園偏 intern）
+  const RULES={'104':{lv:['1','2','2','3'],src:['主投','官網']},'LinkedIn':{lv:['3','4','4','5'],src:['主投','獵才_Lydia']},'內部推薦':{lv:['2','3','3','4'],src:['員工推薦','同事']},'獵頭':{lv:['5','6'],src:['獵才_Lydia','獵才_Johnny']},'校園招募':{lv:['1','intern','intern'],src:['台灣大學','官網']}};
+  const MON=['2025-09','2025-10','2025-11','2025-12','2026-01','2026-02'],REP=['王小明','王阿美','陳大文','林小華','張美麗','李志明','黃淑芬'];
   const pk=a=>a[Math.floor(Math.random()*a.length)];
   const out=[];
-  for(let i=0;i<28;i++){
-    const dp=pk(DEPTS),ch=pk(CHS),r=RULES[ch];
+  for(let i=0;i<25;i++){   // 25 隨機 + 5 極端 = 30 筆
+    const dept=pk(DEPT_POOL),ch=pk(CH_POOL),r=RULES[ch],fns=FUNCS[dept];
     const cd=pk(MON)+'-'+String(5+Math.floor(Math.random()*22)).padStart(2,'0');
     const ob=new Date(new Date(cd).getTime()+(20+Math.floor(Math.random()*35))*86400000).toISOString().slice(0,10);
-    out.push({vac_id:'EXT-'+(i+1),dept:dp[0],func:dp[1].length?pk(dp[1]):'',level:pk(r.lv),grade:'',biz:'部門',
+    out.push({vac_id:'EXT-'+(i+1),dept,func:fns.length?pk(fns):'',level:pk(r.lv),grade:'',biz:'部門',
       close_day:cd,onboard_day:ob,reporter:pk(REP),channel:ch,src:pk(r.src),status:pk(['錄取','錄取','補缺','內轉補缺']),
-      title:dp[0]+'職缺',_source:'external'});
+      title:dept+'職缺',_source:'external'});
   }
+  // 極端值：保證一個明顯熱點（工程部×後端工程×104 大量），與一個稀有高職等
+  ['後端工程','後端工程','後端工程','後端工程'].forEach((f,i)=>out.push({vac_id:'EXT-X'+i,dept:'工程部',func:f,level:'2',grade:'',biz:'部門',close_day:'2026-01-'+(10+i),onboard_day:'2026-02-'+(10+i),reporter:pk(REP),channel:'104',src:'主投',status:'錄取',title:'工程部職缺',_source:'external'}));
+  out.push({vac_id:'EXT-X9',dept:'AI技術應用組',func:'',level:'6',grade:'',biz:'部門',close_day:'2026-02-20',onboard_day:'2026-04-05',reporter:pk(REP),channel:'獵頭',src:'獵才_Johnny',status:'錄取',title:'AI技術應用組職缺',_source:'external'});
   _demoVacCache=out;
   return out.map(v=>({...v}));
 }
 
 function getDemoPipeline(){return[
-  {pip_id:'P1',name:'王小明',role:'後端工程師',stage:'技術面試',src:'LinkedIn',rec:'Ava',note:'技術能力強，薪資期待較高'},
-  {pip_id:'P2',name:'林志遠',role:'產品經理',  stage:'Offer 談判',src:'104',    rec:'Cleo',note:'預計 5/30 前回覆'},
-  {pip_id:'P3',name:'張曉芸',role:'UX 設計師', stage:'初篩',      src:'獵頭',   rec:'Ben', note:'作品集質感優'},
+  {pip_id:'P1',name:'王小明',role:'後端工程師',  stage:'技術面試',  src:'LinkedIn',  rec:'Ava', note:'技術能力強，薪資期待較高'},
+  {pip_id:'P2',name:'王阿美',role:'產品經理',    stage:'Offer 談判',src:'104',       rec:'Cleo',note:'預計本週回覆'},
+  {pip_id:'P3',name:'陳大文',role:'UI/UX 設計師',stage:'初篩',      src:'獵頭',      rec:'Ben', note:'作品集質感優'},
+  {pip_id:'P4',name:'林小華',role:'資料工程師',  stage:'面試中',    src:'內部推薦',  rec:'Ava', note:'內推，背景符合'},
+  {pip_id:'P5',name:'張美麗',role:'行銷企劃',    stage:'Sourcing',  src:'校園招募',  rec:'Cleo',note:'應屆，潛力佳'},
+  {pip_id:'P6',name:'李志明',role:'業務開發',    stage:'JD 準備',   src:'104',       rec:'Ben', note:'待主管確認 JD'},
+  {pip_id:'P7',name:'黃淑芬',role:'前端工程師',  stage:'初篩',      src:'LinkedIn',  rec:'Ava', note:'主動投遞'},
 ];}
 function getDemoOKRForQ(q,prefix){
   if(prefix==='okr'){
@@ -533,7 +543,7 @@ function getDemoLinks(){return[
 
 // ══ LOAD ══
 window.addEventListener('load',async()=>{
-  S.tasks=getDemoTasks();S.vacancies=normVacs(getDemoVac());// S.pipeline starts empty - add via + 新增候選人
+  S.tasks=getDemoTasks();S.vacancies=normVacs(getDemoVac());S.pipeline=getDemoPipeline();
   S.links=getDemoLinks();
   initYearToCurrent(); // 開頁預設年度＝今年
   await resolveRole(); // 依 cfg.accessPw 解析角色（demo 無 api → admin 預覽）
@@ -588,7 +598,7 @@ async function resolveRole(){
 }
 async function loadData(){
   if(!isLive()){
-    S.tasks=getDemoTasks();S.vacancies=normVacs(getDemoVac());
+    S.tasks=getDemoTasks();S.vacancies=normVacs(getDemoVac());S.pipeline=getDemoPipeline();
     renderAll();return;
   }
   await resolveRole();
