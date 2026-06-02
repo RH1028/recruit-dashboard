@@ -1489,7 +1489,7 @@ function getFilteredVacancies(){
 let vacCharts=[];
 const CHART_PAL=['#7c6cf0','#22c3a6','#f59e0b','#ef4444','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#64748b'];
 // ── 圖表呈現（HR 視角）配色：藍色家族、數量越多越深、未填灰 ──
-const VC_DARK='#15436F', VC_LIGHT='#9DC2E6', VC_GRAY='#B7B5AC', VC_TICK='#8C8C8C', VC_GRID='rgba(128,128,128,0.18)';
+const VC_DARK='#0B2C4D', VC_LIGHT='#B8D6EC', VC_GRAY='#B7B5AC', VC_TICK='#8C8C8C', VC_GRID='rgba(128,128,128,0.18)';
 const _h2r=h=>{h=h.replace('#','');return[0,2,4].map(i=>parseInt(h.substr(i,2),16));};
 const _r2h=a=>'#'+a.map(x=>Math.round(x).toString(16).padStart(2,'0')).join('');
 const _mix=(a,b,t)=>_r2h(_h2r(a).map((x,i)=>x+(_h2r(b)[i]-x)*t));
@@ -1595,12 +1595,12 @@ function renderVacChartsInner(){
 
   // ⑥ 月趨勢
   {const m={};data.forEach(r=>{if(r.close_day){const k=String(r.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});const keys=Object.keys(m).sort();
-    const el=document.getElementById('vc-trend');if(el)vacCharts.push(new Chart(el,{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]||0),borderColor:VC_DARK,backgroundColor:'rgba(21,67,111,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:VC_DARK}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},datalabels:{display:false}},scales:{x:{ticks:{color:VC_TICK},grid:{display:false}},y:{beginAtZero:true,ticks:{stepSize:1,color:VC_TICK},grid:{color:VC_GRID}}}}}));}
+    const el=document.getElementById('vc-trend');if(el)vacCharts.push(new Chart(el,{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]||0),borderColor:VC_DARK,backgroundColor:'rgba(11,44,77,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:VC_DARK}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},datalabels:{display:false}},scales:{x:{ticks:{color:VC_TICK},grid:{display:false}},y:{beginAtZero:true,ticks:{stepSize:1,color:VC_TICK},grid:{color:VC_GRID}}}}}));}
 }
 function closeVacCharts(){document.getElementById('chart-modal').classList.remove('open');vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];}
 // 關缺表單下拉選項：資料中既有值 ∪ 常用預設（去重排序）
 function vacFieldOptions(field,selected){
-  const defaults={channel:['獵頭','內推','主動應徵'],src:['LinkedIn','104','員工推薦','CakeResume','官網','其他'],biz:[]};
+  const defaults={channel:['104','LinkedIn','內部推薦','獵頭','主動應徵','CakeResume','官網'],src:['主投','主管推薦','獵才','員工推薦','其他'],biz:[]};
   const vals=[...new Set([...(defaults[field]||[]),...S.vacancies.map(v=>v[field]).filter(Boolean)])].sort();
   return '<option value="">—</option>'+vals.map(v=>`<option ${v===selected?'selected':''}>${esc(v)}</option>`).join('');
 }
