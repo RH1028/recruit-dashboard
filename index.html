@@ -756,6 +756,8 @@ function hpScore(tasks){
 }
 function mcolor(name){const m=S.members.find(m=>m.name===name);return m?m.color:'#888';}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// 將備註中的網址轉成可點連結（先 esc 防 XSS，再把 http(s) 連結包成 <a>，stopPropagation 避免觸發卡片編輯）
+function linkify(s){return esc(s).replace(/(https?:\/\/[^\s]+)/g,'<a href="$1" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--p);text-decoration:underline">$1</a>');}
 
 // ══ KR 選項（任務工時下拉用）— 對應到「子任務指標」層 ══
 // value 格式：「quarter | objective | KR_label | 任務指標名稱」
@@ -1349,7 +1351,7 @@ function renderPipeline(){
         <span class="bdg ${STAGE_CLS[p.stage]||'bg2'}">${esc(p.stage)}</span>
         <span class="bdg bg2">${esc(p.src)}</span>
       </div>
-      ${p.note?`<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">📝 ${esc(p.note)}</div>`:''}
+      ${p.note?`<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word">📝 ${linkify(p.note)}</div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:.5px solid rgba(0,0,0,.06)">
         <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)">
           <div style="width:14px;height:14px;border-radius:50%;background:${mcolor(p.rec)};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;color:#fff">${(p.rec||'?')[0]}</div>
@@ -1790,7 +1792,7 @@ function renderPipeline(){
         <span class="bdg ${STAGE_CLS[p.stage]||'bg2'}">${esc(p.stage)}</span>
         <span class="bdg bg2">${esc(p.src)}</span>
       </div>
-      ${p.note?`<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">📝 ${esc(p.note)}</div>`:''}
+      ${p.note?`<div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5;overflow-wrap:anywhere;word-break:break-word">📝 ${linkify(p.note)}</div>`:''}
       <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:.5px solid rgba(0,0,0,.06)">
         <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)">
           <div style="width:14px;height:14px;border-radius:50%;background:${mcolor(p.rec)};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;color:#fff">${(p.rec||'?')[0]}</div>
