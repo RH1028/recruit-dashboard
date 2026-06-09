@@ -138,6 +138,13 @@ tr:last-child td{border-bottom:none}
 /* L level legend */
 .level-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--bg);border-radius:var(--rs);font-size:11px}
 .ll-item{display:flex;align-items:flex-start;gap:6px}
+/* 可展開說明：點 summary 才展開內容，省版面 */
+.expl{margin-bottom:10px}
+.expl>summary{cursor:pointer;list-style:none;font-size:11px;color:var(--p);user-select:none;padding:2px 0}
+.expl>summary::-webkit-details-marker{display:none}
+.expl>summary::before{content:'▸ ';display:inline-block;font-size:9px}
+.expl[open]>summary::before{content:'▾ '}
+.expl>.expl-bd{margin-top:6px}
 .ll-badge{flex-shrink:0;margin-top:1px}
 /* pipeline cards */
 .p-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
@@ -261,22 +268,27 @@ body.viewer-mode .btp,body.viewer-mode .delbtn,body.viewer-mode .addkr{display:n
           <div class="ll-item"><span class="bdg ba ll-badge">L2</span><span style="color:var(--muted)">需跨部門溝通、主動判斷或協調多方，有一定複雜度</span></div>
           <div class="ll-item"><span class="bdg bc ll-badge">L3</span><span style="color:var(--muted)">高複雜度、高影響力，需策略思考或帶領他人</span></div>
         </div>
-        <!-- 工時表現說明 -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;font-size:10px;color:var(--muted)">
-          工時表現：
-          <span class="bdg hp-routine">📅 待設定日期</span> 專案任務缺起始/結束日期（實際 h、完成度鎖定）
-          <span class="bdg hp-routine">⏳ 未開始</span> 今日 &lt; 起始日期（完成度鎖 0%）
-          <span class="bdg hp-na">⏵ 進行中</span> 已過起始日期、尚未完成
-          <span class="bdg hp-early">⚡ 提前完成</span> 實際 &lt; 預估，完成 100%
-          <span class="bdg hp-ontime">✓ 準時完成</span> 實際 = 預估，完成 100%
-          <span class="bdg hp-over-done">⚠ 超時完成</span> 實際 &gt; 預估，完成 100%
-          <span class="bdg hp-over">✗ 超支未完</span> 實際 &gt; 預估，未完成
-          <span class="bdg hp-routine">↻ 常態進行中</span> 常態工作（一律顯示，不參與工時評估）
-        </div>
-        <!-- 類型說明 -->
-        <div style="font-size:10px;color:var(--muted);margin-bottom:10px;padding:8px 12px;background:var(--bg);border-radius:var(--rs)">
-          📌 <strong>常態工作</strong>（如每日 Sourcing、定期報表）：不計入任務完成率，僅累計工時，無完成度設定。
-        </div>
+        <!-- 工時表現說明（可展開） -->
+        <details class="expl">
+          <summary>工時表現徽章說明</summary>
+          <div class="expl-bd" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:10px;color:var(--muted)">
+            <span class="bdg hp-routine">📅 待設定日期</span> 專案任務缺起始/結束日期（實際 h、完成度鎖定）
+            <span class="bdg hp-routine">⏳ 未開始</span> 今日 &lt; 起始日期（完成度鎖 0%）
+            <span class="bdg hp-na">⏵ 進行中</span> 已過起始日期、尚未完成
+            <span class="bdg hp-early">⚡ 提前完成</span> 實際 &lt; 預估，完成 100%
+            <span class="bdg hp-ontime">✓ 準時完成</span> 實際 = 預估，完成 100%
+            <span class="bdg hp-over-done">⚠ 超時完成</span> 實際 &gt; 預估，完成 100%
+            <span class="bdg hp-over">✗ 超支未完</span> 實際 &gt; 預估，未完成
+            <span class="bdg hp-routine">↻ 常態進行中</span> 常態工作（一律顯示，不參與工時評估）
+          </div>
+        </details>
+        <!-- 類型說明（可展開） -->
+        <details class="expl">
+          <summary>常態工作 vs 專案任務</summary>
+          <div class="expl-bd" style="font-size:10px;color:var(--muted);padding:8px 12px;background:var(--bg);border-radius:var(--rs)">
+            📌 <strong>常態工作</strong>（如每日 Sourcing、定期報表）：不計入任務完成率，僅累計工時，無完成度設定。
+          </div>
+        </details>
         <!-- 負責人篩選 + 日期篩選 -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <span style="font-size:11px;color:var(--muted)">負責人：</span>
@@ -963,7 +975,23 @@ function buildOKRRows(data,q,member){
 function renderOKRBlock(data,store,fullKey,q,addFn,saveFn){
   const{q:qPart,member:memberFilter}=parseKRFullKey(store,fullKey);
   const krType=store==='okrLocal'?'team':'member';
-  return data.map((obj,oi)=>{
+  const hint=`<details class="expl" style="margin-bottom:14px">
+    <summary>ℹ️ 「自動」進度怎麼算？（點開說明）</summary>
+    <div class="expl-bd" style="font-size:11px;color:var(--muted);padding:10px 14px;background:var(--bg);border-radius:var(--rs);line-height:1.75">
+      三層由下往上計算，<strong>只計專案任務（常態工作不納入）</strong>：<br>
+      ① <strong>子任務指標%</strong> ＝ 該指標下各任務「完成度%」的加權平均，權重＝「預估工時」<br>
+      ② <strong>KR%</strong> ＝ 其下所有子任務指標% 的平均<br>
+      ③ <strong>Objective%</strong> ＝ 其下所有 KR% 的平均
+      <div style="margin-top:9px;padding:9px 11px;background:#fff;border-left:3px solid var(--p);border-radius:4px;color:var(--text)">
+        <strong>實例</strong>　KR：建立 2 個新招募管道<br>
+        ‧ 指標 A「管道調研」掛 2 個任務：競品評估（預估 6h／完成 100%）、訪談 3 位獵頭（預估 4h／完成 50%）<br>
+        　→ (100×6 ＋ 50×4) ÷ (6＋4) ＝ <strong style="color:var(--pd)">80%</strong><br>
+        ‧ 指標 B「校園試辦」掛 1 個任務：校園管道試辦（預估 5h／完成 100%）→ <strong style="color:var(--pd)">100%</strong><br>
+        ‧ <strong style="color:var(--pd)">KR% ＝ (80 ＋ 100) ÷ 2 ＝ 90%</strong>
+      </div>
+    </div>
+  </details>`;
+  return hint + (data.map((obj,oi)=>{
     const objPct=calcObjAutoPct(obj,store,fullKey);
     const objColor=objPct>=100?'var(--t)':objPct>=50?'var(--p)':'var(--a)';
     return `
@@ -1006,7 +1034,7 @@ function renderOKRBlock(data,store,fullKey,q,addFn,saveFn){
     }).join('')}
       <button class="addkr" style="margin-top:6px" onclick="(()=>{const n=${store}['${fullKey}'][${oi}].kr.length+1;${store}['${fullKey}'][${oi}].kr.push({label:'KR'+n,text:'',pct:0,pct_mode:'auto',tasks:[]});${saveFn}();})()">＋ 新增 KR</button>
     </div></div>`;
-  }).join('')||'<div style="padding:30px;text-align:center;color:var(--muted)">尚無 Objective，點右上角新增</div>';
+  }).join('')||'<div style="padding:30px;text-align:center;color:var(--muted)">尚無 Objective，點右上角新增</div>');
 }
 function renderOKR(){
   const q=document.getElementById('okr-year').value;
