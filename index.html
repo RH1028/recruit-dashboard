@@ -262,12 +262,15 @@ body.viewer-mode .btp,body.viewer-mode .delbtn,body.viewer-mode .addkr{display:n
           <div><div class="ptitle">任務工時</div></div>
           <button class="btn btp" onclick="addTask()">＋ 新增任務</button>
         </div>
-        <!-- L1~L3 說明 -->
-        <div class="level-legend">
-          <div class="ll-item"><span class="bdg bn ll-badge">L1</span><span style="color:var(--muted)">獨立執行標準/重複性任務，流程清楚，低判斷需求</span></div>
-          <div class="ll-item"><span class="bdg ba ll-badge">L2</span><span style="color:var(--muted)">需跨部門溝通、主動判斷或協調多方，有一定複雜度</span></div>
-          <div class="ll-item"><span class="bdg bc ll-badge">L3</span><span style="color:var(--muted)">高複雜度、高影響力，需策略思考或帶領他人</span></div>
-        </div>
+        <!-- L1~L3 說明（可展開） -->
+        <details class="expl">
+          <summary>難易度 L1～L3 說明</summary>
+          <div class="expl-bd level-legend">
+            <div class="ll-item"><span class="bdg bn ll-badge">L1</span><span style="color:var(--muted)">獨立執行標準/重複性任務，流程清楚，低判斷需求</span></div>
+            <div class="ll-item"><span class="bdg ba ll-badge">L2</span><span style="color:var(--muted)">需跨部門溝通、主動判斷或協調多方，有一定複雜度</span></div>
+            <div class="ll-item"><span class="bdg bc ll-badge">L3</span><span style="color:var(--muted)">高複雜度、高影響力，需策略思考或帶領他人</span></div>
+          </div>
+        </details>
         <!-- 工時表現說明（可展開） -->
         <details class="expl">
           <summary>工時表現徽章說明</summary>
