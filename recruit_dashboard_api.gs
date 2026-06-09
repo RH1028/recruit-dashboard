@@ -145,6 +145,7 @@ function getAllData() {
     settings:   settingsToObject(ss),
     pipeline:   sheetToObjects(ss, 'Pipeline'),
     links:      sheetToObjects(ss, 'Links'),
+    snapshots:  sheetToObjects(ss, 'HourSnapshots'), // 每日工時快照（週對週/區間比較用）
     vacancies:  [...getExternalVacancies(), ...manualVacs], // 外部缺額表 + 手動新增
   };
 }
@@ -437,7 +438,7 @@ function updateOKR(data) {
 // ============================================================
 
 // 純日期欄位：讀出來會轉成 YYYY-MM-DD 字串（給 <input type="date"> 用）
-const PURE_DATE_FIELDS = ['start_date','end_date','close_day','onboard_day','open_date','report_date'];
+const PURE_DATE_FIELDS = ['start_date','end_date','close_day','onboard_day','open_date','report_date','snap_date'];
 
 function sheetToObjects(ss, tabName) {
   const sheet = ss.getSheetByName(tabName);
@@ -962,4 +963,89 @@ function _refStatus(ref) {
   if (!ref) return 'empty';
   const parts = ref.split('|');
   return parts.length >= 4 ? 'new' : 'old';
+}
+
+// ============================================================
+//  每日工時快照（週對週 / 任意區間比較的基礎）
+//
+//  原理：
+//    - 每個任務的 actual_hours 是「一路往上疊加的累計總工時」（不歸零）
+//    - 本函式每天 23:00 自動把「當下每個任務的累計 actual_hours」拍一張照，
+//      連同當天日期存進 HourSnapshots 分頁
+//    - 前端要算「某區間做了多少」時 = 區間結束端累計 − 區間開始前一天累計
+//    - 常態工作（無起訖日）原本無法切區間，靠這套快照就能精準切出每週工時
+//
+//  HourSnapshots 欄位：snap_date | task_id | task_name | member | task_type | actual_hours
+//  （task_name/member/task_type 只是方便人工查 sheet，前端計算只用 task_id + actual_hours）
+//
+//  同一天重複執行 → 先清掉當天舊快照再寫入，結果冪等（永遠是當天最新值）
+// ============================================================
+
+const SNAPSHOT_SHEET   = 'HourSnapshots';
+const SNAPSHOT_HEADERS = ['snap_date', 'task_id', 'task_name', 'member', 'task_type', 'actual_hours'];
+
+function snapshotTasks() {
+  const ss    = SpreadsheetApp.openById(SHEET_ID);
+  const tasks = sheetToObjects(ss, 'Tasks');
+  if (!tasks.length) { Logger.log('⚠ Tasks 無資料，略過快照'); return; }
+
+  const tz    = Session.getScriptTimeZone();
+  const today = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+  // 確保快照分頁與表頭存在
+  let sheet = ss.getSheetByName(SNAPSHOT_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(SNAPSHOT_SHEET);
+    sheet.getRange(1, 1, 1, SNAPSHOT_HEADERS.length).setValues([SNAPSHOT_HEADERS]);
+  } else if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, SNAPSHOT_HEADERS.length).setValues([SNAPSHOT_HEADERS]);
+  }
+
+  // 冪等：先刪掉「今天」已存在的快照列（從後往前刪避免位移）
+  const existing = sheet.getDataRange().getValues();
+  const header   = existing[0];
+  const dIdx     = header.indexOf('snap_date');
+  if (dIdx >= 0) {
+    for (let i = existing.length - 1; i >= 1; i--) {
+      const v = existing[i][dIdx];
+      const d = v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd') : String(v || '').substring(0, 10);
+      if (d === today) sheet.deleteRow(i + 1);
+    }
+  }
+
+  // 一次寫入今天所有任務的累計工時
+  const rows = tasks
+    .filter(t => t.task_id)
+    .map(t => [
+      today,
+      t.task_id,
+      t.task_name || '',
+      t.member || '',
+      t.task_type || '',
+      (+t.actual_hours || 0),
+    ]);
+
+  if (rows.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, SNAPSHOT_HEADERS.length).setValues(rows);
+  }
+  Logger.log('✓ ' + today + ' 已快照 ' + rows.length + ' 筆任務工時');
+  return '✓ ' + today + ' 已快照 ' + rows.length + ' 筆任務工時';
+}
+
+// 一次性：建立「每天晚上 23:00 自動快照」的時間觸發器
+// 使用方式：到 Apps Script 編輯器，函式下拉選 setupSnapshotTrigger → ▶ 執行（只需執行一次）
+// 重複執行不會建立多個觸發器（會先清掉舊的同名觸發器）
+function setupSnapshotTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function (tr) {
+    if (tr.getHandlerFunction() === 'snapshotTasks') ScriptApp.deleteTrigger(tr);
+  });
+  ScriptApp.newTrigger('snapshotTasks')
+    .timeBased()
+    .everyDays(1)
+    .atHour(23)        // 每天 23:00（依 Apps Script 專案時區，請確認設為 GMT+8 台北）
+    .create();
+  const tz = Session.getScriptTimeZone();
+  Logger.log('✓ 已建立每日 23:00 自動快照觸發器（時區：' + tz + '）');
+  Logger.log('  若時區不是台北，請到「專案設定 → 時區」改為 (GMT+08:00) Taipei 後重新執行本函式');
+  return '✓ 已建立每日 23:00 自動快照觸發器（時區：' + tz + '）';
 }
