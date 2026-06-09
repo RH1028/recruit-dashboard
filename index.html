@@ -736,19 +736,22 @@ function _snapCumAt(taskId,dateStr){
   });
   return best?best.v:null;
 }
-// 篩選區間內的工時：優先用快照精準相減；該任務尚無任何快照 → 退回舊的線性估算（proratedHours）
+// 篩選區間內的工時：只有「區間兩端都有快照覆蓋」時才精準相減；
+// 否則（過渡期 / 追蹤起點之前的歷史區間）退回舊的線性估算（proratedHours），避免出現誤導性的 0
 function intervalHours(t,filter){
   if(!filter||(!filter.start&&!filter.end))return +t.actual_hours||0;
-  const hasSnap=(S.snapshots||[]).some(s=>s.task_id===t.task_id);
-  if(!hasSnap)return proratedHours(t,filter);
   const today=_today();
-  // 區間結束端累計：end 為今天或未來 → 用前台最新累計；否則用 end 當天（或之前最近）的快照
-  let endVal;
-  if(!filter.end||filter.end>=today){endVal=+t.actual_hours||0;}
-  else{const v=_snapCumAt(t.task_id,filter.end);endVal=v===null?0:v;}
-  // 區間開始端：start 前一天的累計（查無 → 0，代表追蹤起點之前無資料）
-  let startVal=0;
-  if(filter.start){const v=_snapCumAt(t.task_id,_dayBefore(filter.start));startVal=v===null?0:v;}
+  // 結束端是否有資料：end 為今天/未來（用前台最新累計）或有 snapshot ≤ end
+  const endLive=!filter.end||filter.end>=today;
+  const endSnap=endLive?null:_snapCumAt(t.task_id,filter.end);
+  const endCovered=endLive||endSnap!==null;
+  // 開始端是否有資料：start 為空（從頭算）或有 snapshot < start（start 前一天）
+  const startSnap=filter.start?_snapCumAt(t.task_id,_dayBefore(filter.start)):null;
+  const startCovered=!filter.start||startSnap!==null;
+  // 任一端缺快照覆蓋 → 此區間無法精準相減，退回估算
+  if(!endCovered||!startCovered)return proratedHours(t,filter);
+  const endVal=endLive?(+t.actual_hours||0):endSnap;
+  const startVal=filter.start?(startSnap||0):0;
   return Math.max(0,endVal-startVal);
 }
 // 時間區間快捷鈕：本週/上週（週一～週日）、本月。free range 仍可手動拉
