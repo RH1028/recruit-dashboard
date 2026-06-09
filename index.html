@@ -1351,8 +1351,8 @@ function renderPerf(){
       </tr>`;}).join('')}</tbody></table>
       </div>
       ${routineTasks.length?`<div style="margin-top:12px;padding-top:10px;border-top:.5px solid var(--bdr)">
-        <div class="sec" style="margin-bottom:6px">常態工作工時累計</div>
-        ${routineTasks.map(t=>`<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;color:var(--muted)"><span>↻ ${esc(t.task_name)}</span><span>${t.actual_hours}h 累計</span></div>`).join('')}
+        <div class="sec" style="margin-bottom:6px">常態工作工時${(dateFilter.start||dateFilter.end)?'（區間）':'累計'}</div>
+        ${routineTasks.map(t=>{const rh=Math.round(intervalHours(t,dateFilter)*10)/10;return `<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;color:var(--muted)"><span>↻ ${esc(t.task_name)}</span><span>${rh}h ${(dateFilter.start||dateFilter.end)?'區間':'累計'}</span></div>`;}).join('')}
       </div>`:''}
     </div>`;
 }
