@@ -1682,8 +1682,33 @@ function openDashDetail(type){
   const sfxR=mName?` — ${mName}`:'';
   if(type==='routine'){
     const routine=base.filter(t=>t.task_type==='常態工作');
-    const totalH=Math.round(routine.reduce((s,t)=>s+(+t.actual_hours||0),0)*10)/10;
-    openMdl(`常態工作（${routine.length} 筆）${sfxR}`,`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--gl);border-radius:6px;font-size:12px;color:var(--gd)">↻ 累計工時：<strong>${totalH}h</strong></div><table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>累計實際h</th><th>起始日期</th><th>結束日期</th><th>備註</th></tr></thead><tbody>${routine.map(t=>`<tr><td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.actual_hours||0}h</td><td style="font-size:11px;color:var(--muted)">${esc(t.start_date||'—')}</td><td style="font-size:11px;color:var(--muted)">${esc(t.end_date||'—')}</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>'}</tbody></table>`);
+    const df=getDateFilter('dash');
+    const hasRange=!!(df.start||df.end);
+    const rangeLabel=hasRange?`${df.start||'—'} ～ ${df.end||'—'}`:'';
+    const sumH=Math.round(routine.reduce((s,t)=>s+intervalHours(t,df),0)*10)/10;
+    const cumH=Math.round(routine.reduce((s,t)=>s+(+t.actual_hours||0),0)*10)/10;
+    // 有拉時間段 → 主秀「區間工時」並跟預估h（視為每週應投入）比對達標；無 → 只顯示累計
+    const head=hasRange
+      ? `↻ 區間工時（${rangeLabel}）：<strong>${sumH}h</strong><span style="color:var(--muted);margin-left:8px">·　累計 ${cumH}h</span>`
+      : `↻ 累計工時：<strong>${cumH}h</strong><span style="color:var(--muted);margin-left:8px">（拉時間段或按「本週」鈕，可看區間工時與達標）</span>`;
+    const rows=routine.map(t=>{
+      const ih=Math.round(intervalHours(t,df)*10)/10;
+      const e=+t.est_hours||0;
+      const meet=hasRange&&e>0
+        ? (ih>=e?`<span class="bdg hp-ontime">✓ 達標</span>`:`<span class="bdg hp-routine">${Math.round(ih/e*100)}%</span>`)
+        : '—';
+      return`<tr>
+        <td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td>
+        <td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td>
+        <td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td>
+        <td style="font-size:11px">${e?e+'h':'—'}</td>
+        <td style="font-size:11px;font-weight:500;color:var(--pd)">${hasRange?ih+'h':'—'}</td>
+        <td style="font-size:11px">${meet}</td>
+        <td style="font-size:11px;color:var(--muted)">${t.actual_hours||0}h</td>
+        <td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>';
+    openMdl(`常態工作（${routine.length} 筆）${sfxR}`,`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--gl);border-radius:6px;font-size:12px;color:var(--gd)">${head}</div><table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>預估h/週</th><th>區間工時</th><th>達標</th><th>累計實際h</th><th>備註</th></tr></thead><tbody>${rows}</tbody></table>`);
     return;
   }
   const done=base.filter(t=>t.task_type!=='常態工作'&&['early','ontime','over-done'].includes(hp(t).code));
