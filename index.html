@@ -501,7 +501,7 @@ let mselOpen=null; // 目前展開的複選下拉 key
 
 // ══ CONSTANTS ══
 const PROMOTE_THRESHOLD=80;
-const WEIGHTS={compRate:.25,onTime:.20,hourAcc:.25,l3:.15,krLink:.15};
+const WEIGHTS={compRate:.20,onTime:.05,hourAcc:.05,l3:.35,krLink:.35};
 const LV={L1:'bn',L2:'ba',L3:'bc'};
 const VST={'錄取':'bt','補缺':'bp','內轉補缺':'ba','面試中':'bp','Offer 談判':'bt',Sourcing:'ba',初篩:'bg2','JD 準備':'bc'};
 
@@ -1368,6 +1368,24 @@ function renderPerf(){
           <div class="pw" style="height:6px"><div class="pb" style="width:${d.val}%;height:6px;background:${bc}"></div></div>
           <div style="font-size:9px;color:var(--muted);margin-top:1px">目標 ≥ ${d.target}%</div>
         </div>`;}).join('')}
+        ${(()=>{
+          const wLabel=dims.map(d=>`${d.label.replace('Team OKR × 個人 KR 連結度','KR連結度')}×${Math.round(d.w*100)}%`).join(' ＋ ');
+          const wCalc =dims.map(d=>`${d.val}×${d.w.toFixed(2)}`).join(' ＋ ');
+          return `<details class="expl" style="margin-top:4px">
+            <summary style="font-size:11px">綜合得分計算公式</summary>
+            <div class="expl-bd" style="font-size:10px;color:var(--muted);line-height:1.75">
+              <div style="margin-bottom:5px;color:var(--text)"><strong>綜合得分 ＝ Σ（各維度分數 × 權重）</strong></div>
+              <div style="margin-bottom:4px">＝ ${wLabel}</div>
+              <div style="margin-bottom:9px">本人試算 ＝ ${wCalc} ＝ <strong style="color:${m.color}">${score} 分</strong>（達標門檻 ${PROMOTE_THRESHOLD}）</div>
+              <div style="font-weight:600;color:var(--text);margin-bottom:3px">各維度分數怎麼來：</div>
+              <div>• <strong>任務完成率</strong> ＝ 已完成專案任務 ÷ 全部專案任務 ×100%</div>
+              <div>• <strong>排程準時率</strong> ＝ 未落後任務（提前/準時交件、仍在期限內）÷ 已啟動專案任務 ×100%</div>
+              <div>• <strong>工時準確度</strong> ＝ 已完成任務的工時吻合度平均（實際 ≤ 預估給滿分，超支按超出比例扣分）</div>
+              <div>• <strong>L3 承擔比例</strong> ＝ L3 任務 ÷ 全部專案任務 ×100%</div>
+              <div>• <strong>KR 連結度</strong> ＝ 每筆〔有 Team KR 得 50 ＋ 有個人 KR 得 50〕的平均</div>
+            </div>
+          </details>`;
+        })()}
       </div>
     </div>
     <div class="card" style="margin-top:2px"><div class="sec" style="margin-bottom:10px">任務明細（僅專案任務）</div>
