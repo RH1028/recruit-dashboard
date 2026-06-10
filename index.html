@@ -273,16 +273,30 @@ body.viewer-mode .btp,body.viewer-mode .delbtn,body.viewer-mode .addkr{display:n
         </details>
         <!-- 工時表現說明（可展開） -->
         <details class="expl">
-          <summary>工時表現徽章說明</summary>
-          <div class="expl-bd" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:10px;color:var(--muted)">
-            <span class="bdg hp-routine">📅 待設定日期</span> 專案任務缺起始/結束日期（實際 h、完成度鎖定）
-            <span class="bdg hp-routine">⏳ 未開始</span> 今日 &lt; 起始日期（完成度鎖 0%）
-            <span class="bdg hp-na">⏵ 進行中</span> 已過起始日期、尚未完成
-            <span class="bdg hp-early">⚡ 提前完成</span> 實際 &lt; 預估，完成 100%
-            <span class="bdg hp-ontime">✓ 準時完成</span> 實際 = 預估，完成 100%
-            <span class="bdg hp-over-done">⚠ 超時完成</span> 實際 &gt; 預估，完成 100%
-            <span class="bdg hp-over">✗ 超支未完</span> 實際 &gt; 預估，未完成
-            <span class="bdg hp-routine">↻ 常態進行中</span> 常態工作（一律顯示，不參與工時評估）
+          <summary>工時／進度表現徽章說明</summary>
+          <div class="expl-bd" style="font-size:10px;color:var(--muted)">
+            <div style="font-weight:600;color:var(--text);margin-bottom:5px">① 時數維度 — 看花的工時（實際 h vs 預估 h）</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:11px">
+              <span class="bdg hp-early">⚡ 提前完成</span> 實際 &lt; 預估，完成 100%
+              <span class="bdg hp-ontime">✓ 準時完成</span> 實際 = 預估，完成 100%
+              <span class="bdg hp-over-done">⚠ 超時完成</span> 實際 &gt; 預估，完成 100%
+              <span class="bdg hp-over">✗ 超支未完</span> 實際 &gt; 預估，未完成
+            </div>
+            <div style="font-weight:600;color:var(--text);margin-bottom:5px">② 進度維度 — 看交件時間（對比「應結束日期」）</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:11px">
+              <span class="bdg hp-early">🚀 提前交件</span> 完成 100%，今日 &lt; 應結束日期
+              <span class="bdg hp-ontime">🎯 準時交件</span> 完成 100%，今日 = 應結束日期
+              <span class="bdg hp-over-done">⏰ 逾期完成</span> 完成 100%，今日 &gt; 應結束日期
+              <span class="bdg hp-na">🗓 期限內</span> 未完成，今日 ≤ 應結束日期
+              <span class="bdg hp-over">⛔ 逾期未完</span> 未完成，今日 &gt; 應結束日期
+            </div>
+            <div style="font-weight:600;color:var(--text);margin-bottom:5px">共用 / 前置狀態</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <span class="bdg hp-routine">📅 待設定日期</span> 專案任務缺起始/結束日期（實際 h、完成度鎖定）
+              <span class="bdg hp-routine">⏳ 未開始</span> 今日 &lt; 起始日期（完成度鎖 0%）
+              <span class="bdg hp-na">⏵ 進行中</span> 已過起始日期、尚未完成（時數維度）
+              <span class="bdg hp-routine">↻ 常態進行中</span> 常態工作（一律顯示，不參與評估）
+            </div>
           </div>
         </details>
         <!-- 類型說明（可展開） -->
@@ -322,7 +336,7 @@ body.viewer-mode .btp,body.viewer-mode .delbtn,body.viewer-mode .addkr{display:n
               <th style="width:95px">起始日期</th>
               <th style="width:95px">結束日期</th>
               <th style="width:88px">任務完成度</th>
-              <th style="width:90px">工時表現</th>
+              <th style="width:90px">工時／進度表現</th>
               <th style="width:110px">修正說明</th>
               <th style="width:26px"></th>
             </tr></thead>
@@ -822,6 +836,22 @@ function hp(t){
   if(a>e)            return{code:'over',label:'✗ 超支未完',cls:'hp-over'};
   return{code:'inprog',label:'⏵ 進行中',cls:'hp-na'};
 }
+// 進度（排程）維度：用使用者填的「應結束日期」+「完成度」自動判斷交件時間表現。
+// 與時數維度（hp）並排、互不打架；常態工作/缺日期/未開始 → null（不顯示進度徽章）。
+function hpDate(t){
+  if(t.task_type==='常態工作') return null;
+  if(!t.start_date || !t.end_date) return null;          // 缺日期，時數徽章已提示「待設定日期」
+  const today=new Date().toISOString().substring(0,10);
+  if(today < t.start_date) return null;                  // 未開始，排程尚未啟動
+  const p=+t.completion_pct;
+  if(p===100){                                           // 已完成 → 比對完成當下 vs 應結束日期
+    if(today <  t.end_date) return{code:'d-early', label:'🚀 提前交件',cls:'hp-early'};
+    if(today===t.end_date) return{code:'d-ontime',label:'🎯 準時交件',cls:'hp-ontime'};
+    return{code:'d-late',label:'⏰ 逾期完成',cls:'hp-over-done'};
+  }
+  if(today <= t.end_date) return{code:'d-inrange',label:'🗓 期限內',cls:'hp-na'};  // 未完成、仍在期限內
+  return{code:'d-overdue',label:'⛔ 逾期未完',cls:'hp-over'};                       // 未完成、已過應結束日期
+}
 function hpScore(tasks){
   const eligible=tasks.filter(t=>t.task_type!=='常態工作'&&+t.completion_pct===100);
   if(!eligible.length)return null;
@@ -1191,7 +1221,7 @@ function renderTasks(){
         <div class="pw" style="height:5px"><div class="pb" style="width:${p}%;height:5px;background:${bc}"></div></div>
         ${locked?`<div style="font-size:9px;color:var(--muted);margin-top:1px">「${lockLabel}」鎖定</div>`:''}`}
       </td>
-      <td><span class="bdg ${h.cls}" style="font-size:10px;white-space:nowrap">${h.label}</span></td>
+      <td><span class="bdg ${h.cls}" style="font-size:10px;white-space:nowrap">${h.label}</span>${(()=>{const d=hpDate(t);return d?`<div style="margin-top:3px"><span class="bdg ${d.cls}" style="font-size:10px;white-space:nowrap" title="依「應結束日期」評估交件時間">${d.label}</span></div>`:'';})()}</td>
       <td><input class="ic" value="${esc(t.note||'')}" placeholder="${isOver&&!isRoutine?'請填寫原因…':''}" onchange="onField('${t.task_id}','note',this.value)" style="width:102px;font-size:11px;${isOver&&!isRoutine&&!t.note?'border-color:var(--a)':''}"></td>
       <td><button class="delbtn" onclick="(async()=>{S.tasks=S.tasks.filter(x=>x.task_id!=='${t.task_id}');delete pendingTasks['${t.task_id}'];renderTasks();if(!S.demo)await apiPost({action:'deleteTask',data:{task_id:'${t.task_id}'}});})()">×</button></td>
     </tr>`;
@@ -1213,6 +1243,7 @@ function renderDash(){
   const inprog=regularTasks.filter(t=>INPROG_CODES.includes(hp(t).code));
   const notstart=regularTasks.filter(t=>NOSTART_CODES.includes(hp(t).code));
   const routineTasks=S.tasks.filter(t=>t.task_type==='常態工作'&&(!_mName||t.member===_mName)&&taskInRange(t,dateFilter));
+  const overdue=regularTasks.filter(t=>hpDate(t)?.code==='d-overdue'); // 進度維度：已過應結束日期、尚未完成
   const overT=S.tasks.filter(t=>t.task_type!=='常態工作'&&+t.actual_hours>+t.est_hours);
   const showMember=dashViewMode==='member';
   const activeDashMember=showMember?S.members[dashMbrIdx]:null;
@@ -1239,6 +1270,7 @@ function renderDash(){
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('inprog')"><div class="ml">進行中 <span style="font-size:9px;color:var(--p)">▸ 明細</span></div><div class="mv" style="color:var(--p)">${inprog.length}</div></div>
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('notstart')"><div class="ml">未開始 <span style="font-size:9px;color:var(--muted)">▸ 明細</span></div><div style="font-size:9px;color:var(--muted);margin-top:-2px;margin-bottom:2px;font-style:italic">未到日期 / 待設日期</div><div class="mv" style="color:var(--muted)">${notstart.length}</div></div>
       <div class="mc" style="cursor:pointer" onclick="openDashDetail('over')"><div class="ml">超時完成 <span style="font-size:9px;color:var(--a)">▸ 明細</span></div><div style="font-size:9px;color:var(--a);margin-top:-2px;margin-bottom:2px;font-style:italic">⚠ 已完成中的警訊</div><div class="mv" style="color:var(--a)">${regularTasks.filter(t=>hp(t).code==='over-done').length}</div></div>
+      <div class="mc" style="cursor:pointer" onclick="openDashDetail('overdue')"><div class="ml">逾期未完 <span style="font-size:9px;color:var(--c)">▸ 明細</span></div><div style="font-size:9px;color:var(--c);margin-top:-2px;margin-bottom:2px;font-style:italic">⛔ 已過應結束日期</div><div class="mv" style="color:var(--c)">${overdue.length}</div></div>
     </div>
     ${(()=>{
     const mn=showMember&&activeDashMember?activeDashMember.name:null;
@@ -1289,6 +1321,10 @@ function renderPerf(){
   const promote=score>=PROMOTE_THRESHOLD;
   const overCnt=S.tasks.filter(t=>t.member===m.name&&t.task_type!=='常態工作'&&+t.actual_hours>+t.est_hours&&taskInRange(t,dateFilter)).length;
   const earlyCnt=S.tasks.filter(t=>t.member===m.name&&hp(t).code==='early'&&taskInRange(t,dateFilter)).length;
+  // 進度維度統計（依應結束日期）：逾期未完 / 逾期完成（晚交）為負面警示；提前交件為正面
+  const overdueCnt=S.tasks.filter(t=>t.member===m.name&&taskInRange(t,dateFilter)&&hpDate(t)?.code==='d-overdue').length;
+  const lateCnt   =S.tasks.filter(t=>t.member===m.name&&taskInRange(t,dateFilter)&&hpDate(t)?.code==='d-late').length;
+  const earlyDelivCnt=S.tasks.filter(t=>t.member===m.name&&taskInRange(t,dateFilter)&&hpDate(t)?.code==='d-early').length;
   document.getElementById('perf-body').innerHTML=`
     <div class="two">
       <div class="card">
@@ -1304,6 +1340,9 @@ function renderPerf(){
         <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
           ${earlyCnt?`<span class="bdg hp-early">⚡ 提前完成 ${earlyCnt} 項</span>`:''}
           ${overCnt?`<span class="bdg hp-over">⚠ 超支 ${overCnt} 項</span>`:''}
+          ${earlyDelivCnt?`<span class="bdg hp-early">🚀 提前交件 ${earlyDelivCnt} 項</span>`:''}
+          ${overdueCnt?`<span class="bdg hp-over">⛔ 逾期未完 ${overdueCnt} 項</span>`:''}
+          ${lateCnt?`<span class="bdg hp-over-done">⏰ 逾期完成 ${lateCnt} 項</span>`:''}
           ${routineHours?`<span class="bdg hp-routine">↻ 常態工時 ${routineHours}h</span>`:''}
         </div>
       </div>
@@ -1333,9 +1372,10 @@ function renderPerf(){
         <th>結束日期</th>
         <th>完成度</th>
         <th>工時表現</th>
+        <th>進度表現</th>
         <th>修正說明</th>
       </tr></thead>
-      <tbody>${regularTasks.map(t=>{const h=hp(t),e=+t.est_hours,a=+t.actual_hours,diff=(a-e).toFixed(1),p=+t.completion_pct;return`<tr class="${+t.actual_hours>+t.est_hours?'warn-row':''}">
+      <tbody>${regularTasks.map(t=>{const h=hp(t),d=hpDate(t),e=+t.est_hours,a=+t.actual_hours,diff=(a-e).toFixed(1),p=+t.completion_pct;return`<tr class="${+t.actual_hours>+t.est_hours?'warn-row':''}">
         <td style="font-size:11px">${esc(t.task_name)}</td>
         <td style="font-size:10px;color:var(--muted)" title="${esc(t.team_kr_ref||'')}">${esc(t.team_kr_ref||'—')}</td>
         <td style="font-size:10px;color:var(--muted)" title="${esc(t.member_kr_ref||'')}">${esc(t.member_kr_ref||'—')}</td>
@@ -1347,6 +1387,7 @@ function renderPerf(){
         <td style="font-size:11px;color:var(--muted)">${esc(t.end_date||'—')}</td>
         <td><div style="font-size:10px">${p}%</div><div class="pw" style="height:4px"><div class="pb" style="width:${p}%;height:4px;background:${p===100?'var(--t)':p>=50?m.color:'var(--a)'}"></div></div></td>
         <td><span class="bdg ${h.cls}">${h.label}</span></td>
+        <td>${d?`<span class="bdg ${d.cls}">${d.label}</span>`:'<span style="font-size:10px;color:var(--muted)">—</span>'}</td>
         <td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td>
       </tr>`;}).join('')}</tbody></table>
       </div>
@@ -1771,13 +1812,15 @@ function openDashDetail(type){
   const inprog=base.filter(t=>t.task_type!=='常態工作'&&['inprog','over'].includes(hp(t).code));
   const notstart=base.filter(t=>t.task_type!=='常態工作'&&['notyet','nodate'].includes(hp(t).code));
   const overDone=base.filter(t=>hp(t).code==='over-done');
+  const overdue=base.filter(t=>hpDate(t)?.code==='d-overdue');
   let tasks,title;
   const sfx=mName?` — ${mName}`:'';
   if(type==='done'){tasks=done;title=`已完成任務（${done.length} 筆）${sfx}`;}
   else if(type==='inprog'){tasks=inprog;title=`進行中任務（${inprog.length} 筆）${sfx}`;}
   else if(type==='notstart'){tasks=notstart;title=`未開始任務（${notstart.length} 筆）${sfx}`;}
+  else if(type==='overdue'){tasks=overdue;title=`逾期未完任務（${overdue.length} 筆）${sfx}`;}
   else{tasks=overDone;title=`超時完成任務（${overDone.length} 筆）${sfx}`;}
-  openMdl(title,`<table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>預估h</th><th>實際h</th><th>備註</th></tr></thead><tbody>${tasks.map(t=>{const h=hp(t),diff=(+t.actual_hours-+t.est_hours).toFixed(1);return`<tr><td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.completion_pct}%</td><td><span class="bdg ${h.cls}">${h.label}</span></td><td style="font-size:11px">${t.est_hours}h</td><td style="font-size:11px;color:${parseFloat(diff)>0?'var(--cd)':'var(--td)'}">${t.actual_hours}h</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>'}</tbody></table>`);
+  openMdl(title,`<table><thead><tr><th>任務名稱</th><th>負責人</th><th>難易度</th><th>完成度</th><th>工時表現</th><th>進度表現</th><th>應結束日期</th><th>預估h</th><th>實際h</th><th>備註</th></tr></thead><tbody>${tasks.map(t=>{const h=hp(t),d=hpDate(t),diff=(+t.actual_hours-+t.est_hours).toFixed(1);return`<tr><td style="font-size:11px;font-weight:500">${esc(t.task_name)}</td><td style="font-size:11px;color:${mcolor(t.member)}">${esc(t.member)}</td><td><span class="bdg ${LV[t.level]||'bg2'}">${t.level}</span></td><td style="font-size:11px">${t.completion_pct}%</td><td><span class="bdg ${h.cls}">${h.label}</span></td><td>${d?`<span class="bdg ${d.cls}">${d.label}</span>`:'<span style="font-size:10px;color:var(--muted)">—</span>'}</td><td style="font-size:11px;color:var(--muted)">${esc(t.end_date||'—')}</td><td style="font-size:11px">${t.est_hours}h</td><td style="font-size:11px;color:${parseFloat(diff)>0?'var(--cd)':'var(--td)'}">${t.actual_hours}h</td><td style="font-size:10px;color:var(--muted)">${esc(t.note||'—')}</td></tr>`;}).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:12px">無資料</td></tr>'}</tbody></table>`);
 }
 function renderVacancy(){
   renderVacMultiFilters();
