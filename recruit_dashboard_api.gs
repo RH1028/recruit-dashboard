@@ -147,6 +147,7 @@ function getAllData() {
     links:      sheetToObjects(ss, 'Links'),
     snapshots:  sheetToObjects(ss, 'HourSnapshots'), // 每日工時快照（週對週/區間比較用）
     vacancies:  [...getExternalVacancies(), ...manualVacs], // 外部缺額表 + 手動新增
+    vacFieldOpts: getVacFieldOptions(),                     // 管道/來源下拉選項（與缺額表同步）
   };
 }
 
@@ -251,6 +252,56 @@ function getExternalVacancies() {
     Logger.log('getExternalVacancies error: ' + err.message);
     return results;
   }
+}
+
+// 讀缺額表「管道」「來源」欄的下拉選項，讓 dashboard 的下拉與缺額表自動同步。
+// 來源 = ① 該欄的資料驗證（下拉）清單 ② 該欄實際填過的值，兩者聯集去重。
+// 這樣缺額表改下拉、dashboard 下次載入即自動跟著變，不需再改 code。
+function getVacFieldOptions() {
+  const FIELD_COL = { channel: '管道', src: '來源' };
+  const sets = { channel: {}, src: {} };           // 用物件當 set（GAS 環境）
+  try {
+    const ss = SpreadsheetApp.openById(VACANCY_SHEET_ID);
+    VACANCY_TABS.forEach(function (tabName) {
+      const sheet = ss.getSheetByName(tabName);
+      if (!sheet) return;
+      const lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
+      if (lastRow < 1 || lastCol < 1) return;
+      const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+      const nRows  = Math.max(1, Math.min(lastRow - 1, 1000));  // 上限 1000 列，避免超大表
+      Object.keys(FIELD_COL).forEach(function (key) {
+        const cIdx = header.indexOf(FIELD_COL[key]);
+        if (cIdx < 0 || lastRow < 2) return;
+        const range = sheet.getRange(2, cIdx + 1, nRows, 1);
+        // ① 資料驗證清單（完整下拉選項）
+        range.getDataValidations().forEach(function (r) { _collectDvValues(r[0], sets[key]); });
+        // ② 實際填過的值
+        range.getValues().forEach(function (r) {
+          const v = String(r[0] || '').trim(); if (v) sets[key][v] = true;
+        });
+      });
+    });
+  } catch (err) {
+    Logger.log('getVacFieldOptions error: ' + err.message);
+  }
+  return { channel: Object.keys(sets.channel).sort(), src: Object.keys(sets.src).sort() };
+}
+
+// 從一個 DataValidation 取出清單值（支援「指定項目清單」與「來自某範圍」兩種下拉）
+function _collectDvValues(dv, set) {
+  if (!dv) return;
+  try {
+    const DVC = SpreadsheetApp.DataValidationCriteria;
+    const type = dv.getCriteriaType();
+    const cv   = dv.getCriteriaValues();
+    if (type === DVC.VALUE_IN_LIST && Array.isArray(cv[0])) {
+      cv[0].forEach(function (v) { const s = String(v).trim(); if (s) set[s] = true; });
+    } else if (type === DVC.VALUE_IN_RANGE && cv[0] && cv[0].getValues) {
+      cv[0].getValues().forEach(function (row) {
+        row.forEach(function (v) { const s = String(v).trim(); if (s) set[s] = true; });
+      });
+    }
+  } catch (e) {}
 }
 
 // 缺額表覆寫的查找鍵：優先用 job_no；空白則用「中文職稱|報到人員|close_day|onboard_day」組合

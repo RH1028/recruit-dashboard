@@ -508,7 +508,7 @@ const VST={'錄取':'bt','補缺':'bp','內轉補缺':'ba','面試中':'bp','Off
 // ══ DEMO DATA ══
 const DEMO_MEMBERS=[{name:'Ava',color:'#7F77DD'},{name:'Ben',color:'#1D9E75'},{name:'Cleo',color:'#D85A30'}];
 const DEMO_SETTINGS={write_token:'demo',promote_threshold:'80'};
-let S={tasks:[],okr:[],mbp:[],vacancies:[],pipeline:[],members:DEMO_MEMBERS,settings:DEMO_SETTINGS,links:[],snapshots:[],demo:true};
+let S={tasks:[],okr:[],mbp:[],vacancies:[],vacFieldOpts:{channel:[],src:[]},pipeline:[],members:DEMO_MEMBERS,settings:DEMO_SETTINGS,links:[],snapshots:[],demo:true};
 
 function getDemoTasks(){
   // 新格式：team_kr_ref / member_kr_ref = "quarter | objective | KR_label | 任務指標名稱"
@@ -589,7 +589,7 @@ window.addEventListener('load',async()=>{
     try{
       const d=await apiPost({action:'getAll'});
       if(d&&!d.error){
-        Object.assign(S,{tasks:d.tasks||S.tasks,vacancies:normVacs(d.vacancies||S.vacancies),pipeline:d.pipeline||S.pipeline,members:d.members||DEMO_MEMBERS,settings:d.settings||DEMO_SETTINGS,okr:d.okr||[],mbp:d.mbp||[],links:d.links||S.links,snapshots:d.snapshots||[],demo:false});
+        Object.assign(S,{tasks:d.tasks||S.tasks,vacancies:normVacs(d.vacancies||S.vacancies),vacFieldOpts:d.vacFieldOpts||S.vacFieldOpts,pipeline:d.pipeline||S.pipeline,members:d.members||DEMO_MEMBERS,settings:d.settings||DEMO_SETTINGS,okr:d.okr||[],mbp:d.mbp||[],links:d.links||S.links,snapshots:d.snapshots||[],demo:false});
         const tenv=document.getElementById('tenv');
         tenv.textContent='已連線 Sheets';tenv.className='tenv live';
       }
@@ -647,6 +647,7 @@ async function loadData(){
       Object.assign(S,{
         tasks:d.tasks||[],
         vacancies:normVacs(d.vacancies||[]),
+        vacFieldOpts:d.vacFieldOpts||S.vacFieldOpts,
         pipeline:d.pipeline||[],
         members:d.members||S.members||DEMO_MEMBERS,
         settings:d.settings||S.settings||DEMO_SETTINGS,
@@ -1790,8 +1791,11 @@ function renderVacChartsInner(){
 function closeVacCharts(){document.getElementById('chart-modal').classList.remove('open');vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];}
 // 關缺表單下拉選項：資料中既有值 ∪ 常用預設（去重排序）
 function vacFieldOptions(field,selected){
-  const defaults={channel:['104','LinkedIn','內部推薦','獵頭','主動應徵','CakeResume','官網'],src:['主投','主管推薦','獵才','員工推薦','其他'],biz:[]};
-  const vals=[...new Set([...(defaults[field]||[]),...S.vacancies.map(v=>v[field]).filter(Boolean)])].sort();
+  // 下拉選項與缺額表同步：優先用後端讀回的缺額表下拉清單(vacFieldOpts)，再併入實際出現過的值。
+  // 後端讀不到時（離線/未部署）才退回寫死的預設清單，避免下拉變空。
+  const FALLBACK={channel:['104','LinkedIn','內部推薦','獵頭','主動應徵','CakeResume','官網'],src:['主投','主管推薦','獵才','員工推薦','其他'],biz:[]};
+  const fromSheet=(S.vacFieldOpts&&S.vacFieldOpts[field]&&S.vacFieldOpts[field].length)?S.vacFieldOpts[field]:(FALLBACK[field]||[]);
+  const vals=[...new Set([...fromSheet,...S.vacancies.map(v=>v[field]).filter(Boolean)])].sort();
   return '<option value="">—</option>'+vals.map(v=>`<option ${v===selected?'selected':''}>${esc(v)}</option>`).join('');
 }
 function switchVTab(tab){
