@@ -438,7 +438,7 @@ function updateOKR(data) {
 // ============================================================
 
 // 純日期欄位：讀出來會轉成 YYYY-MM-DD 字串（給 <input type="date"> 用）
-const PURE_DATE_FIELDS = ['start_date','end_date','close_day','onboard_day','open_date','report_date','snap_date'];
+const PURE_DATE_FIELDS = ['start_date','end_date','done_date','close_day','onboard_day','open_date','report_date','snap_date'];
 
 function sheetToObjects(ss, tabName) {
   const sheet = ss.getSheetByName(tabName);
