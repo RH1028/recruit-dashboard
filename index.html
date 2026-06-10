@@ -2000,7 +2000,7 @@ function renderPipeline(){
   const cards=document.getElementById('pipeline-cards');if(!cards)return;
   if(!S.pipeline||!S.pipeline.length){cards.innerHTML='<div style="color:var(--muted);font-size:12px;padding:20px">尚無候選人，點右上角新增</div>';return;}
   cards.innerHTML=S.pipeline.map((p,pi)=>`
-    <div style="background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:13px 15px;cursor:pointer" onclick="openEditPipeline(${pi})">
+    <div style="background:var(--surf);border:.5px solid var(--bdr);border-radius:var(--r);padding:13px 15px;cursor:pointer" onclick="openPipelineDetail(${pi})" title="點卡片看完整內容">
       <div style="font-size:13px;font-weight:500;margin-bottom:3px">${esc(p.name)}</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:8px">${esc(p.role)}</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
@@ -2013,9 +2013,29 @@ function renderPipeline(){
           <div style="width:14px;height:14px;border-radius:50%;background:${mcolor(p.rec)};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;color:#fff">${(p.rec||'?')[0]}</div>
           ${esc(p.rec)}
         </div>
-        <span style="font-size:10px;color:var(--p)">編輯 →</span>
+        <span onclick="event.stopPropagation();openEditPipeline(${pi})" style="font-size:10px;color:var(--p);cursor:pointer;padding:3px 6px;margin:-3px -6px;border-radius:5px" title="編輯此候選人">編輯 →</span>
       </div>
     </div>`).join('');
+}
+// 點卡片 → 完整格式的唯讀檢視（備註保留換行與連結）
+function openPipelineDetail(pi){
+  const p=S.pipeline[pi];if(!p)return;
+  const STAGE_CLS={'技術面試':'bp','Offer 談判':'bt','初篩':'bg2',Sourcing:'ba','最終面試':'bp'};
+  openMdl(p.name,`
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">${esc(p.role||'—')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px">
+      <span class="bdg ${STAGE_CLS[p.stage]||'bg2'}">${esc(p.stage||'—')}</span>
+      <span class="bdg bg2">${esc(p.src||'—')}</span>
+    </div>
+    <div class="ml" style="margin-bottom:4px">備註</div>
+    <div style="font-size:12.5px;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;background:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:16px">${p.note?linkify(p.note):'<span style="color:var(--muted)">（無備註）</span>'}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:.5px solid var(--bdr)">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)">
+        <div style="width:18px;height:18px;border-radius:50%;background:${mcolor(p.rec)};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;color:#fff">${(p.rec||'?')[0]}</div>
+        負責 Recruiter：${esc(p.rec||'—')}
+      </div>
+      <button class="btn btp" onclick="openEditPipeline(${pi})">編輯 →</button>
+    </div>`);
 }
 function openAddPipeline(){openMdl('新增候選人',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
