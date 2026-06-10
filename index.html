@@ -1791,11 +1791,12 @@ function renderVacChartsInner(){
 function closeVacCharts(){document.getElementById('chart-modal').classList.remove('open');vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];}
 // 關缺表單下拉選項：資料中既有值 ∪ 常用預設（去重排序）
 function vacFieldOptions(field,selected){
-  // 下拉選項與缺額表同步：優先用後端讀回的缺額表下拉清單(vacFieldOpts)，再併入實際出現過的值。
+  // 下拉選項＝缺額表「選項清單」分頁回傳的清單(vacFieldOpts)，保留該分頁的排列順序。
   // 後端讀不到時（離線/未部署）才退回寫死的預設清單，避免下拉變空。
   const FALLBACK={channel:['104','LinkedIn','內部推薦','獵頭','主動應徵','CakeResume','官網'],src:['主投','主管推薦','獵才','員工推薦','其他'],biz:[]};
   const fromSheet=(S.vacFieldOpts&&S.vacFieldOpts[field]&&S.vacFieldOpts[field].length)?S.vacFieldOpts[field]:(FALLBACK[field]||[]);
-  const vals=[...new Set([...fromSheet,...S.vacancies.map(v=>v[field]).filter(Boolean)])].sort();
+  const vals=fromSheet.slice();
+  if(selected&&!vals.includes(selected))vals.push(selected); // 既有資料的值若不在清單中也保留，避免顯示不出來
   return '<option value="">—</option>'+vals.map(v=>`<option ${v===selected?'selected':''}>${esc(v)}</option>`).join('');
 }
 function switchVTab(tab){

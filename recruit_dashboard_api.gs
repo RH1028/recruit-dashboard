@@ -11,6 +11,7 @@ const SHEET_ID = '1R8TKDQlN3VhG7NP6w9aZtD_qIFkk2b2WCp-yhDAvBos'; // Dashboard DB
 const VACANCY_SHEET_ID = '1hGbY4FyRjRMpGb1NVj59D7epk7eas7dW-FL0PVHXXas';
 const VACANCY_TABS     = ['AI技術應用組', '工程部', '行銷運營部', '業務部']; // 逐分頁讀取再合併
 const VACANCY_STATUS   = ['錄取', '補缺', '內轉補缺']; // 只取這些 Status
+const VAC_OPTIONS_TAB  = '選項清單'; // 缺額表內維護「管道(A欄)/來源(B欄)」下拉選項的分頁
 
 // ── 使用者權限：全部在 Users 分頁設定，前端只在「設定」填一次密碼 ──
 // Users 分頁欄位：account（標籤用）| password（明碼）| role（viewer/editor/admin）| name | active（yes/no）
@@ -254,54 +255,33 @@ function getExternalVacancies() {
   }
 }
 
-// 讀缺額表「管道」「來源」欄的下拉選項，讓 dashboard 的下拉與缺額表自動同步。
-// 來源 = ① 該欄的資料驗證（下拉）清單 ② 該欄實際填過的值，兩者聯集去重。
-// 這樣缺額表改下拉、dashboard 下次載入即自動跟著變，不需再改 code。
+// 讀缺額表「選項清單」分頁的下拉選項，讓 dashboard 的下拉與缺額表自動同步。
+// 結構：第 1 列為表頭（管道 / 來源），各選項依序列在其下方；保留表單順序、去重、略過空白。
+// 這樣只要在「選項清單」改，dashboard 下次載入即自動跟著變，不需再改 code。
 function getVacFieldOptions() {
-  const FIELD_COL = { channel: '管道', src: '來源' };
-  const sets = { channel: {}, src: {} };           // 用物件當 set（GAS 環境）
+  const FIELD_HEADER = { channel: '管道', src: '來源' };
+  const out = { channel: [], src: [] };
   try {
     const ss = SpreadsheetApp.openById(VACANCY_SHEET_ID);
-    VACANCY_TABS.forEach(function (tabName) {
-      const sheet = ss.getSheetByName(tabName);
-      if (!sheet) return;
-      const lastRow = sheet.getLastRow(), lastCol = sheet.getLastColumn();
-      if (lastRow < 1 || lastCol < 1) return;
-      const header = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-      const nRows  = Math.max(1, Math.min(lastRow - 1, 1000));  // 上限 1000 列，避免超大表
-      Object.keys(FIELD_COL).forEach(function (key) {
-        const cIdx = header.indexOf(FIELD_COL[key]);
-        if (cIdx < 0 || lastRow < 2) return;
-        const range = sheet.getRange(2, cIdx + 1, nRows, 1);
-        // ① 資料驗證清單（完整下拉選項）
-        range.getDataValidations().forEach(function (r) { _collectDvValues(r[0], sets[key]); });
-        // ② 實際填過的值
-        range.getValues().forEach(function (r) {
-          const v = String(r[0] || '').trim(); if (v) sets[key][v] = true;
-        });
-      });
+    const sheet = ss.getSheetByName(VAC_OPTIONS_TAB);
+    if (!sheet) { Logger.log('缺額表找不到分頁：' + VAC_OPTIONS_TAB); return out; }
+    const data = sheet.getDataRange().getValues();
+    if (data.length < 2) return out;
+    const header = data[0].map(function (h) { return String(h).trim(); });
+    Object.keys(FIELD_HEADER).forEach(function (key) {
+      const cIdx = header.indexOf(FIELD_HEADER[key]);
+      if (cIdx < 0) return;
+      const seen = {}, list = [];
+      for (let i = 1; i < data.length; i++) {
+        const v = String(data[i][cIdx] || '').trim();
+        if (v && !seen[v]) { seen[v] = true; list.push(v); }
+      }
+      out[key] = list;
     });
   } catch (err) {
     Logger.log('getVacFieldOptions error: ' + err.message);
   }
-  return { channel: Object.keys(sets.channel).sort(), src: Object.keys(sets.src).sort() };
-}
-
-// 從一個 DataValidation 取出清單值（支援「指定項目清單」與「來自某範圍」兩種下拉）
-function _collectDvValues(dv, set) {
-  if (!dv) return;
-  try {
-    const DVC = SpreadsheetApp.DataValidationCriteria;
-    const type = dv.getCriteriaType();
-    const cv   = dv.getCriteriaValues();
-    if (type === DVC.VALUE_IN_LIST && Array.isArray(cv[0])) {
-      cv[0].forEach(function (v) { const s = String(v).trim(); if (s) set[s] = true; });
-    } else if (type === DVC.VALUE_IN_RANGE && cv[0] && cv[0].getValues) {
-      cv[0].getValues().forEach(function (row) {
-        row.forEach(function (v) { const s = String(v).trim(); if (s) set[s] = true; });
-      });
-    }
-  } catch (e) {}
+  return out;
 }
 
 // 缺額表覆寫的查找鍵：優先用 job_no；空白則用「中文職稱|報到人員|close_day|onboard_day」組合
