@@ -494,12 +494,13 @@ function upsertRow(sheetId, tabName, idField, data) {
     sheet.getRange(1, 1, 1, header.length).setValues([header]);
   } else {
     header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    // 若 data 帶了新 key 而 header 沒有，把新欄位補到末端（updated_at 前）
+    // 若 data 帶了新 key 而 header 沒有，於「現有最後一欄之後」真正新增欄位。
+    // 注意：必須用 lastColumn+offset 直接寫到全新的空欄，不可用 updated_at 的位置 setValue，
+    //       否則會覆蓋掉 updated_at 的標題、把舊資料誤標成新欄位（曾造成 done_date 顯示 updated_at 時間戳）。
     const missing = Object.keys(data).filter(k => !k.startsWith('_') && header.indexOf(k) < 0);
     if (missing.length) {
-      const updIdx = header.indexOf('updated_at');
-      const insertAt = updIdx >= 0 ? updIdx : header.length;
-      missing.forEach((k, offset) => sheet.getRange(1, insertAt + 1 + offset).setValue(k));
+      const startCol = sheet.getLastColumn();
+      missing.forEach((k, offset) => sheet.getRange(1, startCol + 1 + offset).setValue(k));
       header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     }
   }
