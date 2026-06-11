@@ -1682,8 +1682,10 @@ function getFilteredVacancies(){
 // ══ 關缺圖表呈現 ══
 let vacCharts=[];
 const CHART_PAL=['#7c6cf0','#22c3a6','#f59e0b','#ef4444','#3b82f6','#a855f7','#ec4899','#14b8a6','#f97316','#64748b'];
-// ── 圖表呈現（HR 視角）配色：藍色家族、數量越多越深、未填灰 ──
+// ── 圖表呈現（HR 視角）配色：莫蘭迪不同色相（每類一色、低彩度、辨識度高）、未填灰 ──
 const VC_DARK='#0B2C4D', VC_LIGHT='#B8D6EC', VC_GRAY='#B7B5AC', VC_TICK='#8C8C8C', VC_GRID='rgba(128,128,128,0.18)';
+// 莫蘭迪色盤：低彩度、不同色相，冷暖交錯排列讓相鄰色段對比明顯；類別依數量排序後依序取色。
+const MORANDI=['#7E96A6','#B58A7A','#97A98C','#C9B07E','#9487A6','#C2918F','#6F9A93','#A6A579','#8C99B0','#B59CA8'];
 const _h2r=h=>{h=h.replace('#','');return[0,2,4].map(i=>parseInt(h.substr(i,2),16));};
 const _r2h=a=>'#'+a.map(x=>Math.round(x).toString(16).padStart(2,'0')).join('');
 const _mix=(a,b,t)=>_r2h(_h2r(a).map((x,i)=>x+(_h2r(b)[i]-x)*t));
@@ -1721,13 +1723,13 @@ function renderVacChartsInner(){
   const colorByCount=(f)=>{
     const allK=[...new Set(data.map(r=>r[f]||'未填'))];
     const nb=allK.filter(k=>k!=='未填').sort((a,b)=>cnt(f,b)-cnt(f,a));
-    const rp=_ramp(nb.length), color={}; nb.forEach((k,i)=>color[k]=rp[i]);
+    const color={}; nb.forEach((k,i)=>color[k]=MORANDI[i%MORANDI.length]);
     const order=[...nb]; if(allK.includes('未填')){color['未填']=VC_GRAY;order.push('未填');}
     return{order,color};
   };
   const lvLabel=v=>/^\d+$/.test(v)?'職等'+v:v;
   document.getElementById('chart-body').innerHTML=
-    `<div style="font-size:11px;color:var(--muted);margin-bottom:14px">資料範圍：${note}（反映目前篩選條件）｜配色：數量越多越深、未填灰</div>`
+    `<div style="font-size:11px;color:var(--muted);margin-bottom:14px">資料範圍：${note}（反映目前篩選條件）｜配色：莫蘭迪色（每類一色相、未填灰）</div>`
     +`<div class="vc-block"><div class="vc-title">① 重點數字</div><div class="vc-kpis" id="vc-kpis"></div></div>`
     +`<div class="vc-block"><div class="vc-title">② 職能 × 管道</div><div class="vc-legend" id="vc-lg-ch"></div><div style="position:relative" id="vc-bx-ch"><canvas id="vc-ch"></canvas></div></div>`
     +`<div class="vc-block"><div class="vc-title">③ 職能 × 來源</div><div class="vc-legend" id="vc-lg-src"></div><div style="position:relative" id="vc-bx-src"><canvas id="vc-src"></canvas></div></div>`
