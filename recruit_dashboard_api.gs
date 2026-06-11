@@ -220,7 +220,7 @@ function getExternalVacancies() {
         job_no:    col('單號'),
       };
 
-      const get  = (row, idx) => idx >= 0 ? (row[idx] || '') : '';
+      const get  = (row, idx) => idx >= 0 ? (row[idx] || '').toString().trim() : '';
       const date = (row, idx) => idx >= 0 ? formatDate(row[idx]) : '';
 
       for (let i = 1; i < data.length; i++) {
