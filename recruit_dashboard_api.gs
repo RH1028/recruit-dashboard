@@ -238,7 +238,7 @@ function getExternalVacancies() {
           close_day:   date(row, C.close_day),
           onboard_day: date(row, C.onboard),
           reporter:    get(row, C.reporter),
-          channel:     normOpt(get(row, C.channel)),   // 與「選項清單」共用正規化，避免髒值分裂/篩不到
+          channel:     aliasChannel(normOpt(get(row, C.channel))),   // 正規化＋別名（獵頭→Hunter），與「選項清單」對齊
           src:         normOpt(get(row, C.src)),
           status:      status,
           title:       get(row, C.title),
@@ -347,6 +347,12 @@ function normOpt(val) {
     .replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }) // 全形 ASCII→半形（含全形數字１２３）
     .replace(/　/g, ' ')                                                             // 全形空白→半形
     .trim();
+}
+
+// 管道別名：把同義／舊寫法統一成標準寫法（標準寫法需存在於「選項清單」A欄）。要再合併其他寫法時，加一行即可。
+const CHANNEL_ALIAS = { '獵頭': 'Hunter' };
+function aliasChannel(v) {
+  return CHANNEL_ALIAS[v] || v;
 }
 
 // ============================================================
