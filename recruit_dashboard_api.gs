@@ -238,8 +238,8 @@ function getExternalVacancies() {
           close_day:   date(row, C.close_day),
           onboard_day: date(row, C.onboard),
           reporter:    get(row, C.reporter),
-          channel:     get(row, C.channel),
-          src:         get(row, C.src),
+          channel:     normOpt(get(row, C.channel)),   // 與「選項清單」共用正規化，避免髒值分裂/篩不到
+          src:         normOpt(get(row, C.src)),
           status:      status,
           title:       get(row, C.title),
           job_no:      get(row, C.job_no).toString().trim(),
@@ -273,7 +273,7 @@ function getVacFieldOptions() {
       if (cIdx < 0) return;
       const seen = {}, list = [];
       for (let i = 1; i < data.length; i++) {
-        const v = String(data[i][cIdx] || '').trim();
+        const v = normOpt(data[i][cIdx]);
         if (v && !seen[v]) { seen[v] = true; list.push(v); }
       }
       out[key] = list;
@@ -336,6 +336,17 @@ function formatDate(val) {
     return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
   return val.toString().trim();
+}
+
+// 正規化「選項型」欄位（管道／來源）：全形→半形、移除零寬字元、全形空白→半形、去頭尾空白。
+// 目的：讓實際職缺資料的值與「選項清單」的標準寫法對齊，避免「１０４」「104 」「104」被當成不同值，
+// 造成下拉重複、或勾選後撈不到髒資料的職缺。兩邊（選項清單與實際資料）共用此函式，確保永遠對得上。
+function normOpt(val) {
+  return String(val == null ? '' : val)
+    .replace(/[​-‍﻿]/g, '')                                               // 零寬字元（zero-width space/joiner、BOM）
+    .replace(/[！-～]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); }) // 全形 ASCII→半形（含全形數字１２３）
+    .replace(/　/g, ' ')                                                             // 全形空白→半形
+    .trim();
 }
 
 // ============================================================

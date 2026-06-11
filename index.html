@@ -1641,7 +1641,10 @@ const VAC_MSEL_FIELDS=[{key:'dept',label:'部門'},{key:'func',label:'職能'},{
 function renderVacMultiFilters(){
   VAC_MSEL_FIELDS.forEach(f=>{
     const host=document.getElementById('ms-'+f.key);if(!host)return;
-    const vals=[...new Set(S.vacancies.map(v=>v[f.key]).filter(Boolean))].sort();
+    // 管道/來源：選項以缺額表「選項清單」分頁為準（保留表單順序），避免實際資料的髒值（多空格/全形）分裂成重複選項；
+    // 部門/職能/職等沒有維護選項清單，仍從實際資料去重。
+    const optList=(S.vacFieldOpts&&S.vacFieldOpts[f.key]&&S.vacFieldOpts[f.key].length)?S.vacFieldOpts[f.key]:null;
+    const vals=optList?optList.slice():[...new Set(S.vacancies.map(v=>v[f.key]).filter(Boolean))].sort();
     const sel=vacSel[f.key];
     [...sel].forEach(v=>{if(!vals.includes(v))sel.delete(v);}); // 清掉已不存在的選項
     const cnt=sel.size,open=mselOpen===f.key;
