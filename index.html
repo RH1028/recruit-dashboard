@@ -192,6 +192,31 @@ body.viewer-mode .btp,body.viewer-mode .delbtn,body.viewer-mode .addkr{display:n
 .vc-tab td.hit{background:rgba(46,107,166,.14);font-weight:600}
 .vc-tab td.zero{color:#b9b9b9}
 .vc-tab .rt,.vc-tab tfoot td{font-weight:600}.vc-tab tfoot td{background:var(--bg)}
+/* ②③④ 互動式職能分布 */
+.vcd-tabs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.vcd-tab{font-size:12px;padding:5px 14px;border:1px solid var(--bdr);background:#fff;border-radius:999px;cursor:pointer;color:var(--muted)}
+.vcd-tab.on{background:#0B2C4D;color:#fff;border-color:#0B2C4D}
+.vcd-tab.dis{opacity:.35;cursor:not-allowed}
+.vc-row{display:flex;align-items:center;margin:6px 0}
+.vc-rlab{width:118px;flex:none;font-size:12px;text-align:right;padding-right:10px;color:#3b424c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vc-track{flex:1;display:flex;height:26px;border-radius:5px;overflow:hidden;background:#f1efe9}
+.vc-seg{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;min-width:0;transition:filter .12s}
+.vc-row .vc-seg{cursor:pointer}
+.vc-seg:hover{filter:brightness(1.08) saturate(1.12)}
+.vc-seg.on{outline:2px solid #0B2C4D;outline-offset:-2px}
+.vc-hint{font-size:11px;color:var(--muted);margin-top:8px}
+.vc-drillbox{margin-top:14px;border-top:1px dashed var(--bdr);padding-top:12px}
+.vc-dhead{font-size:13px;font-weight:700}.vc-dhead b{color:#0B2C4D}
+.vc-dnote{font-size:11px;color:var(--muted);margin:2px 0 10px}
+.vc-bk{margin:12px 0}
+.vc-bktitle{font-size:12px;font-weight:600;color:#3b424c;margin-bottom:5px}
+.vc-pvctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:12px}
+.vc-pvctl>span{color:var(--muted)}
+.vc-tab td.cell{font-weight:600}
+.vc-tab td.rh,.vc-tab th.rh{text-align:left;font-weight:600;white-space:nowrap}
+#vc-tip{position:fixed;z-index:9999;background:#222933;color:#fff;font-size:11.5px;line-height:1.6;padding:9px 12px;border-radius:9px;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.28);max-width:300px;display:none}
+#vc-tip .tt{font-weight:700;margin-bottom:4px}
+#vc-tip .tl{opacity:.95}#vc-tip .tl em{color:#9fb4c4;font-style:normal}#vc-tip .tl b{color:#E2C892;font-weight:700;margin:0 5px 0 1px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -1700,10 +1725,101 @@ function orderLevels(levels){
   const other=levels.filter(l=>num.indexOf(l)<0&&intern.indexOf(l)<0&&blank.indexOf(l)<0).sort();
   return[...num,...other,...intern,...blank];
 }
+/* ══ ②③④ 互動式職能分布 ＋ ⑤ 交叉樞紐表：共用狀態與工具 ══ */
+let VC_data=[];                            // 目前篩選後資料（供互動讀取）
+let VC_segDim='channel';                   // ②目前堆疊維度
+let VC_drill=null;                         // ②下鑽 {func,segDim,segVal}
+let VC_pvRow='func', VC_pvCol='channel';   // ⑤樞紐 列/欄維度
+let VC_tipInit=false;
+const VC_DIM={func:'職能',channel:'管道',src:'來源',level:'職等'};
+const VC_SEGDIMS=['channel','src','level'];
+const VC_ALLDIMS=['func','channel','src','level'];
+const vcShow=(dim,v)=>(dim==='level'&&/^\d+$/.test(v))?'職等'+v:v;
+const vcBreak=(recs,dim)=>{const m={};recs.forEach(r=>{const k=r[dim]||'未填';m[k]=(m[k]||0)+1;});return m;};
+function vcValues(dim){const m=vcBreak(VC_data,dim);if(dim==='level')return orderLevels(Object.keys(m));let ks=Object.keys(m).filter(k=>k!=='未填').sort((a,b)=>m[b]-m[a]);if('未填'in m)ks.push('未填');return ks;}
+function vcColor(dim){const c={};let i=0;vcValues(dim).forEach(k=>{c[k]=k==='未填'?VC_GRAY:MORANDI[(i++)%MORANDI.length];});return c;}
+function vcLegend(dim){const c=vcColor(dim);return `<div class="vc-legend">`+vcValues(dim).map(k=>`<span><i style="background:${c[k]}"></i>${esc(vcShow(dim,k))}</span>`).join('')+`</div>`;}
+function vcBar(map,dim,scale,fixed,activeVal,clickFunc){
+  const color=vcColor(dim);
+  const segs=vcValues(dim).filter(k=>map[k]).map(k=>{
+    const w=map[k]/scale*100,bg=color[k];
+    const cls='vc-seg'+(activeVal===k?' on':'')+(fixed?' hov':'');
+    const dat=fixed?` data-fix="${encodeURIComponent(JSON.stringify(fixed))}" data-dim="${dim}" data-sv="${encodeURIComponent(k)}"`:` title="${esc(vcShow(dim,k))}：${map[k]} 筆"`;
+    const clk=(clickFunc!=null)?` onclick="vcPick('${encodeURIComponent(clickFunc)}','${encodeURIComponent(k)}')"`:'';
+    return `<div class="${cls}" style="width:${w.toFixed(3)}%;background:${bg};color:${_labelColor(bg)}"${clk}${dat}>${map[k]}</div>`;
+  }).join('');
+  return `<div class="vc-track">${segs}</div>`;
+}
+function renderFuncDist(){
+  const host=document.getElementById('vc-funcdist');if(!host)return;
+  const seg=VC_segDim, funcs=vcValues('func');
+  const rowTot=f=>VC_data.filter(r=>(r.func||'未填')===f).length;
+  const MAXT=Math.max(1,...funcs.map(rowTot));
+  const tabs=VC_SEGDIMS.map(d=>`<button class="vcd-tab ${d===seg?'on':''}" onclick="vcSetSeg('${d}')">${VC_DIM[d]}</button>`).join('');
+  const rows=funcs.map(f=>{
+    const map=vcBreak(VC_data.filter(r=>(r.func||'未填')===f),seg);
+    const active=(VC_drill&&VC_drill.func===f&&VC_drill.segDim===seg)?VC_drill.segVal:null;
+    return `<div class="vc-row"><div class="vc-rlab">${esc(vcShow('func',f))} · ${rowTot(f)}</div>${vcBar(map,seg,MAXT,{func:f},active,f)}</div>`;
+  }).join('');
+  host.innerHTML=`<div class="vc-title">② 職能分布（依管道／來源／職等，可點擊下鑽）</div>
+    <div class="vcd-tabs">${tabs}</div>${vcLegend(seg)}<div>${rows}</div>
+    <div class="vc-hint">👆 點任一色段，下方展開「該職能 × 該${VC_DIM[seg]}」在其餘維度（含職等）的分配；滑鼠移到色段也會即時顯示細分。</div>
+    <div id="vc-drill"></div>`;
+  renderFuncDrill();
+}
+function renderFuncDrill(){
+  const box=document.getElementById('vc-drill');if(!box)return;
+  if(!VC_drill){box.innerHTML='';return;}
+  const {func,segDim,segVal}=VC_drill;
+  const subset=VC_data.filter(r=>(r.func||'未填')===func&&(r[segDim]||'未填')===segVal);
+  const rem=VC_SEGDIMS.filter(d=>d!==segDim);
+  const blocks=rem.map(od=>{const map=vcBreak(subset,od);if(!Object.keys(map).length)return '';return `<div class="vc-bk"><div class="vc-bktitle">依${VC_DIM[od]}分配</div>${vcLegend(od)}${vcBar(map,od,Math.max(1,subset.length),{func,[segDim]:segVal},null,null)}</div>`;}).join('');
+  box.innerHTML=`<div class="vc-drillbox"><div class="vc-dhead"><b>${esc(vcShow('func',func))}</b> ｜ ${VC_DIM[segDim]} ＝ <b>${esc(vcShow(segDim,segVal))}</b></div><div class="vc-dnote">共 ${subset.length} 筆，往下看在其餘維度的分配：</div>${blocks||'<div class="vc-dnote">此組合沒有資料。</div>'}</div>`;
+}
+function vcSetSeg(d){VC_segDim=d;VC_drill=null;renderFuncDist();}
+function vcPick(ef,ev){const f=decodeURIComponent(ef),v=decodeURIComponent(ev);VC_drill=(VC_drill&&VC_drill.func===f&&VC_drill.segDim===VC_segDim&&VC_drill.segVal===v)?null:{func:f,segDim:VC_segDim,segVal:v};renderFuncDist();}
+function vcTipFromEl(s){
+  const fixed=JSON.parse(decodeURIComponent(s.dataset.fix)),dim=s.dataset.dim,val=decodeURIComponent(s.dataset.sv);
+  const full=Object.assign({},fixed,{[dim]:val});
+  const subset=VC_data.filter(r=>Object.keys(full).every(k=>(r[k]||'未填')===full[k]));
+  const rem=VC_ALLDIMS.filter(d=>!(d in full));
+  let html=`<div class="tt">${esc(vcShow(dim,val))} · ${subset.length} 筆</div>`;
+  rem.forEach(od=>{const m=vcBreak(subset,od);const parts=Object.keys(m).sort((a,b)=>m[b]-m[a]).map(k=>`${esc(vcShow(od,k))}<b>${m[k]}</b>`).join('、');html+=`<div class="tl"><em>依${VC_DIM[od]}：</em>${parts}</div>`;});
+  return html;
+}
+function vcInitTip(){
+  if(VC_tipInit)return;VC_tipInit=true;
+  let tip=document.getElementById('vc-tip');if(!tip){tip=document.createElement('div');tip.id='vc-tip';document.body.appendChild(tip);}
+  document.addEventListener('mouseover',e=>{const s=e.target.closest('.vc-seg.hov');if(!s)return;tip.innerHTML=vcTipFromEl(s);tip.style.display='block';});
+  document.addEventListener('mousemove',e=>{if(tip.style.display!=='block')return;let x=e.clientX+14,y=e.clientY+16,w=tip.offsetWidth,h=tip.offsetHeight;if(x+w>innerWidth-8)x=e.clientX-w-14;if(y+h>innerHeight-8)y=e.clientY-h-16;tip.style.left=x+'px';tip.style.top=y+'px';});
+  document.addEventListener('mouseout',e=>{if(e.target.closest('.vc-seg.hov'))tip.style.display='none';});
+}
+function renderPivot(){
+  const host=document.getElementById('vc-pivot');if(!host)return;
+  let rd=VC_pvRow,cd=VC_pvCol;if(rd===cd)cd=VC_ALLDIMS.find(d=>d!==rd);
+  const rowVals=vcValues(rd),colVals=vcValues(cd);
+  const cell=(rv,cv)=>VC_data.filter(r=>(r[rd]||'未填')===rv&&(r[cd]||'未填')===cv).length;
+  const rowTot=rv=>VC_data.filter(r=>(r[rd]||'未填')===rv).length;
+  const colTot=cv=>VC_data.filter(r=>(r[cd]||'未填')===cv).length;
+  const maxCell=Math.max(1,...rowVals.flatMap(rv=>colVals.map(cv=>cell(rv,cv))));
+  const base=_h2r('#6F8FA6');
+  const bgOf=v=>{if(!v)return '#fbfaf7';const t=0.12+0.88*(v/maxCell);return `rgba(${base[0]},${base[1]},${base[2]},${t.toFixed(2)})`;};
+  const fgOf=v=>{if(!v)return '#cfccc4';return (0.12+0.88*(v/maxCell))>0.55?'#fff':'#21455f';};
+  const btns=(cur,fn,excl)=>VC_ALLDIMS.map(d=>`<button class="vcd-tab ${d===cur?'on':''} ${d===excl?'dis':''}" ${d===excl?'':`onclick="${fn}('${d}')"`}>${VC_DIM[d]}</button>`).join('');
+  let html=`<div class="vc-title">⑤ 交叉樞紐表（任選兩維，看各別總數）</div>
+    <div class="vc-pvctl"><span>列</span>${btns(rd,'vcSetPvRow',cd)}<span style="margin-left:10px">欄</span>${btns(cd,'vcSetPvCol',rd)}</div>
+    <div style="overflow-x:auto"><table class="vc-tab"><thead><tr><th class="rh">${VC_DIM[rd]} ＼ ${VC_DIM[cd]}</th>`+colVals.map(cv=>`<th>${esc(vcShow(cd,cv))}</th>`).join('')+`<th>總數</th></tr></thead><tbody>`;
+  rowVals.forEach(rv=>{html+=`<tr><td class="rh">${esc(vcShow(rd,rv))}</td>`+colVals.map(cv=>{const v=cell(rv,cv);return `<td class="cell" style="background:${bgOf(v)};color:${fgOf(v)}">${v||''}</td>`;}).join('')+`<td class="rt">${rowTot(rv)}</td></tr>`;});
+  html+=`</tbody><tfoot><tr><td class="rh">總數</td>`+colVals.map(cv=>`<td>${colTot(cv)}</td>`).join('')+`<td>${VC_data.length}</td></tr></tfoot></table></div>
+    <div class="vc-hint">顏色越深人數越多；最右「總數」＝該${VC_DIM[rd]}總數，最下列＝各${VC_DIM[cd]}總數。</div>`;
+  host.innerHTML=html;
+}
+function vcSetPvRow(d){VC_pvRow=d;if(VC_pvCol===d)VC_pvCol=VC_ALLDIMS.find(x=>x!==d);renderPivot();}
+function vcSetPvCol(d){if(d===VC_pvRow)return;VC_pvCol=d;renderPivot();}
 async function openVacCharts(){
-  if(typeof Chart==='undefined'){alert('圖表元件尚在載入（需連網），請稍候再試一次。');return;}
   document.getElementById('chart-modal').classList.add('open');
-  renderVacChartsInner();                       // 先用目前資料立即呈現
+  VC_drill=null;                                 // 每次開啟重置下鑽狀態
+  renderVacChartsInner();                       // 先用目前資料立即呈現（①②⑤ 純 HTML，不需 Chart.js）
   if(isLive()){                                  // 連線時靜默抓最新來源資料重畫（即時覆蓋暫代值）
     try{
       const d=await apiPost({action:'getAll'});
@@ -1718,23 +1834,11 @@ function renderVacChartsInner(){
   const data=getFilteredVacancies();
   const total=data.length, all=S.vacancies.length;
   const note=total===all?`全部 ${total} 筆`:`篩選後 ${total} / ${all} 筆`;
-  const cnt=(f,v)=>data.filter(r=>(r[f]||'未填')===v).length;
-  // 數量越多越深、未填灰
-  const colorByCount=(f)=>{
-    const allK=[...new Set(data.map(r=>r[f]||'未填'))];
-    const nb=allK.filter(k=>k!=='未填').sort((a,b)=>cnt(f,b)-cnt(f,a));
-    const color={}; nb.forEach((k,i)=>color[k]=MORANDI[i%MORANDI.length]);
-    const order=[...nb]; if(allK.includes('未填')){color['未填']=VC_GRAY;order.push('未填');}
-    return{order,color};
-  };
-  const lvLabel=v=>/^\d+$/.test(v)?'職等'+v:v;
   document.getElementById('chart-body').innerHTML=
     `<div style="font-size:11px;color:var(--muted);margin-bottom:14px">資料範圍：${note}（反映目前篩選條件）｜配色：莫蘭迪色（每類一色相、未填灰）</div>`
     +`<div class="vc-block"><div class="vc-title">① 重點數字</div><div class="vc-kpis" id="vc-kpis"></div></div>`
-    +`<div class="vc-block"><div class="vc-title">② 職能 × 管道</div><div class="vc-legend" id="vc-lg-ch"></div><div style="position:relative" id="vc-bx-ch"><canvas id="vc-ch"></canvas></div></div>`
-    +`<div class="vc-block"><div class="vc-title">③ 職能 × 來源</div><div class="vc-legend" id="vc-lg-src"></div><div style="position:relative" id="vc-bx-src"><canvas id="vc-src"></canvas></div></div>`
-    +`<div class="vc-block"><div class="vc-title">④ 職能 × 職等</div><div class="vc-legend" id="vc-lg-lv"></div><div style="position:relative" id="vc-bx-lv"><canvas id="vc-lv"></canvas></div></div>`
-    +`<div class="vc-block"><div class="vc-title">⑤ 職等 × 管道 × 來源（三維交叉表）</div><div style="overflow-x:auto" id="vc-xtab"></div><div style="font-size:11px;color:var(--muted);margin-top:8px">淺藍格＝有資料的組合；每橫列、每直欄加總皆收斂到右下角總計。</div></div>`
+    +`<div class="vc-block" id="vc-funcdist"></div>`
+    +`<div class="vc-block" id="vc-pivot"></div>`
     +`<div class="vc-block"><div class="vc-title">⑥ 月趨勢（依 Close Day）</div><div style="position:relative;height:220px"><canvas id="vc-trend"></canvas></div></div>`;
   vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];
   if(!total){document.getElementById('chart-body').insertAdjacentHTML('beforeend','<div style="color:var(--muted);font-size:13px;text-align:center;padding:30px 0">無符合條件的資料</div>');return;}
@@ -1746,51 +1850,13 @@ function renderVacChartsInner(){
   const kp=[['總關缺數',total,''],['錄取',by('錄取'),pct(by('錄取'))+'%'],['補缺',by('補缺'),pct(by('補缺'))+'%'],['內轉補缺',by('內轉補缺'),pct(by('內轉補缺'))+'%'],['平均報到天數',avg==null?'—':avg+' 天','Close → 報到']];
   document.getElementById('vc-kpis').innerHTML=kp.map(k=>`<div class="vc-kpi"><div class="l">${esc(k[0])}</div><div class="v">${k[1]}</div><div class="s">${esc(k[2])}</div></div>`).join('');
 
-  const DL=(typeof ChartDataLabels!=='undefined')?[ChartDataLabels]:[];
-  const stackOpts={indexAxis:'y',responsive:true,maintainAspectRatio:false,animation:false,
-    plugins:{legend:{display:false},
-      tooltip:{callbacks:{label:c=>c.raw>0?c.dataset.label+' '+c.raw+' 筆':null}},
-      datalabels:{display:c=>c.dataset.data[c.dataIndex]>0,formatter:v=>v,font:{size:11,weight:'600'},color:c=>_labelColor(c.dataset.backgroundColor)}},
-    scales:{x:{stacked:true,beginAtZero:true,ticks:{stepSize:1,color:VC_TICK},grid:{color:VC_GRID}},
-      y:{stacked:true,ticks:{color:VC_TICK},grid:{display:false}}}};
-  // 職能(列) × segField(段) 水平堆疊長條
-  function stackChart(canvasId,legId,boxId,segField){
-    const lab=segField==='level'?lvLabel:(x=>x);   // 只有職等維度才加「職等」前綴
-    const rowKeys=[...new Set(data.map(r=>r.func||'未填'))].sort((a,b)=>cnt('func',b)-cnt('func',a));
-    const {order:segKeys,color:cmap}=colorByCount(segField);
-    document.getElementById(legId).innerHTML=segKeys.map(s=>`<span><i style="background:${cmap[s]}"></i>${esc(lab(s))}</span>`).join('');
-    const rowTot=rowKeys.map(rk=>data.filter(r=>(r.func||'未填')===rk).length);
-    document.getElementById(boxId).style.height=(Math.max(rowKeys.length,1)*40+24)+'px';
-    const datasets=segKeys.map(sv=>({label:lab(sv),data:rowKeys.map(rk=>data.filter(r=>(r.func||'未填')===rk&&(r[segField]||'未填')===sv).length),backgroundColor:cmap[sv],borderRadius:3}));
-    const el=document.getElementById(canvasId);if(el)vacCharts.push(new Chart(el,{type:'bar',data:{labels:rowKeys.map((rk,i)=>esc(rk)+' · '+rowTot[i]),datasets},options:stackOpts,plugins:DL}));
-  }
-  stackChart('vc-ch','vc-lg-ch','vc-bx-ch','channel');
-  stackChart('vc-src','vc-lg-src','vc-bx-src','src');
-  stackChart('vc-lv','vc-lg-lv','vc-bx-lv','level');
+  // ②③④ 合一：互動式職能分布（點擊下鑽 + hover 細分）；⑤ 交叉樞紐表
+  VC_data=data; vcInitTip();
+  renderFuncDist();
+  renderPivot();
 
-  // ⑤ 三維交叉表：職等 × 管道 × 來源
-  {
-    const lvKeys=orderLevels([...new Set(data.map(r=>r.level||'未填'))]);
-    const srcAll=[...new Set(data.map(r=>r.src||'未填'))];
-    const srcKeys=srcAll.filter(k=>k!=='未填').sort((a,b)=>cnt('src',b)-cnt('src',a));
-    if(srcAll.includes('未填'))srcKeys.push('未填');
-    let html='<table class="vc-tab"><thead><tr><th style="text-align:left">職等</th><th style="text-align:left">管道</th>'+srcKeys.map(s=>`<th>${esc(s)}</th>`).join('')+'<th>列總</th></tr></thead><tbody>';
-    const colTot={};srcKeys.forEach(s=>colTot[s]=0);let grand=0;
-    lvKeys.forEach(lvk=>{
-      const chans=[...new Set(data.filter(r=>(r.level||'未填')===lvk).map(r=>r.channel||'未填'))].sort((a,b)=>cnt('channel',b)-cnt('channel',a));
-      chans.forEach((ch,ci)=>{
-        const cells=srcKeys.map(s=>data.filter(r=>(r.level||'未填')===lvk&&(r.channel||'未填')===ch&&(r.src||'未填')===s).length);
-        const rt=cells.reduce((a,b)=>a+b,0);grand+=rt;cells.forEach((v,i)=>colTot[srcKeys[i]]+=v);
-        html+='<tr>'+(ci===0?`<td class="grp" rowspan="${chans.length}">${esc(lvLabel(lvk))}</td>`:'')+`<td class="subc">${esc(ch)}</td>`
-          +cells.map(v=>v>0?`<td class="hit">${v}</td>`:'<td class="zero">0</td>').join('')+`<td class="rt">${rt}</td></tr>`;
-      });
-    });
-    html+='</tbody><tfoot><tr><td colspan="2" style="text-align:left">欄總</td>'+srcKeys.map(s=>`<td>${colTot[s]}</td>`).join('')+`<td>${grand}</td></tr></tfoot></table>`;
-    document.getElementById('vc-xtab').innerHTML=html;
-  }
-
-  // ⑥ 月趨勢
-  {const m={};data.forEach(r=>{if(r.close_day){const k=String(r.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});const keys=Object.keys(m).sort();
+  // ⑥ 月趨勢（需 Chart.js；未載入則略過，不影響 ①②⑤）
+  if(typeof Chart!=='undefined'){const m={};data.forEach(r=>{if(r.close_day){const k=String(r.close_day).slice(0,7);m[k]=(m[k]||0)+1;}});const keys=Object.keys(m).sort();
     const el=document.getElementById('vc-trend');if(el)vacCharts.push(new Chart(el,{type:'line',data:{labels:keys,datasets:[{data:keys.map(k=>m[k]||0),borderColor:VC_DARK,backgroundColor:'rgba(11,44,77,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:VC_DARK}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},datalabels:{display:false}},scales:{x:{ticks:{color:VC_TICK},grid:{display:false}},y:{beginAtZero:true,ticks:{stepSize:1,color:VC_TICK},grid:{color:VC_GRID}}}}}));}
 }
 function closeVacCharts(){document.getElementById('chart-modal').classList.remove('open');vacCharts.forEach(c=>{try{c.destroy();}catch(e){}});vacCharts=[];}
