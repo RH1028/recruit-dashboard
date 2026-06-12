@@ -1796,7 +1796,8 @@ function vcInitTip(){
 }
 function renderPivot(){
   const host=document.getElementById('vc-pivot');if(!host)return;
-  let rd=VC_pvRow,cd=VC_pvCol;if(rd===cd)cd=VC_ALLDIMS.find(d=>d!==rd);
+  const rd='func';                         // 列固定為「職能」→ 最右「總數」永遠是各職能總數
+  let cd=VC_pvCol; if(cd==='func')cd='channel';
   const rowVals=vcValues(rd),colVals=vcValues(cd);
   const cell=(rv,cv)=>VC_data.filter(r=>(r[rd]||'未填')===rv&&(r[cd]||'未填')===cv).length;
   const rowTot=rv=>VC_data.filter(r=>(r[rd]||'未填')===rv).length;
@@ -1805,17 +1806,16 @@ function renderPivot(){
   const base=_h2r('#6F8FA6');
   const bgOf=v=>{if(!v)return '#fbfaf7';const t=0.12+0.88*(v/maxCell);return `rgba(${base[0]},${base[1]},${base[2]},${t.toFixed(2)})`;};
   const fgOf=v=>{if(!v)return '#cfccc4';return (0.12+0.88*(v/maxCell))>0.55?'#fff':'#21455f';};
-  const btns=(cur,fn,excl)=>VC_ALLDIMS.map(d=>`<button class="vcd-tab ${d===cur?'on':''} ${d===excl?'dis':''}" ${d===excl?'':`onclick="${fn}('${d}')"`}>${VC_DIM[d]}</button>`).join('');
-  let html=`<div class="vc-title">⑤ 交叉樞紐表（任選兩維，看各別總數）</div>
-    <div class="vc-pvctl"><span>列</span>${btns(rd,'vcSetPvRow',cd)}<span style="margin-left:10px">欄</span>${btns(cd,'vcSetPvCol',rd)}</div>
+  const colBtns=VC_SEGDIMS.map(d=>`<button class="vcd-tab ${d===cd?'on':''}" onclick="vcSetPvCol('${d}')">${VC_DIM[d]}</button>`).join('');
+  let html=`<div class="vc-title">⑤ 各職能 × 任選維度（看各職能總數）</div>
+    <div class="vc-pvctl"><span>列</span><span class="vcd-tab on" style="cursor:default">職能（固定）</span><span style="margin-left:14px">欄</span>${colBtns}</div>
     <div style="overflow-x:auto"><table class="vc-tab"><thead><tr><th class="rh">${VC_DIM[rd]} ＼ ${VC_DIM[cd]}</th>`+colVals.map(cv=>`<th>${esc(vcShow(cd,cv))}</th>`).join('')+`<th>總數</th></tr></thead><tbody>`;
   rowVals.forEach(rv=>{html+=`<tr><td class="rh">${esc(vcShow(rd,rv))}</td>`+colVals.map(cv=>{const v=cell(rv,cv);return `<td class="cell" style="background:${bgOf(v)};color:${fgOf(v)}">${v||''}</td>`;}).join('')+`<td class="rt">${rowTot(rv)}</td></tr>`;});
   html+=`</tbody><tfoot><tr><td class="rh">總數</td>`+colVals.map(cv=>`<td>${colTot(cv)}</td>`).join('')+`<td>${VC_data.length}</td></tr></tfoot></table></div>
     <div class="vc-hint">顏色越深人數越多；最右「總數」＝該${VC_DIM[rd]}總數，最下列＝各${VC_DIM[cd]}總數。</div>`;
   host.innerHTML=html;
 }
-function vcSetPvRow(d){VC_pvRow=d;if(VC_pvCol===d)VC_pvCol=VC_ALLDIMS.find(x=>x!==d);renderPivot();}
-function vcSetPvCol(d){if(d===VC_pvRow)return;VC_pvCol=d;renderPivot();}
+function vcSetPvCol(d){if(d==='func')return;VC_pvCol=d;renderPivot();}
 async function openVacCharts(){
   document.getElementById('chart-modal').classList.add('open');
   VC_drill=null;                                 // 每次開啟重置下鑽狀態
