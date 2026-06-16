@@ -1537,7 +1537,7 @@ function openAddVac(){openMdl('新增關缺',`
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="G3 / G5"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
-    <div><div class="ml">事業</div><select class="ic" id="nv-biz">${vacFieldOptions('biz','')}</select></div>
+    <div><div class="ml">事業</div><input class="ic" id="nv-biz" list="nv-biz-dl" placeholder="選擇或自行輸入"><datalist id="nv-biz-dl">${bizDatalist()}</datalist></div>
     <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
     <div><div class="ml">close day</div><input type="date" class="ic" id="nv-close"></div>
     <div><div class="ml">報到日</div><input type="date" class="ic" id="nv-onboard"></div>
@@ -1989,7 +1989,7 @@ function openEditVac(vi){
       <div><div class="ml">職能</div><input class="ic" id="ev-func" value="${esc(v.func||'')}"></div>
       <div><div class="ml">職等</div><input class="ic" id="ev-level" value="${esc(v.level||'')}"></div>
       <div><div class="ml">職級</div><input class="ic" id="ev-grade" value="${esc(v.grade||'')}"></div>
-      <div><div class="ml">事業</div><select class="ic" id="ev-biz">${vacFieldOptions('biz',v.biz||'')}</select></div>
+      <div><div class="ml">事業</div><input class="ic" id="ev-biz" value="${esc(v.biz||'')}" list="ev-biz-dl" placeholder="選擇或自行輸入"><datalist id="ev-biz-dl">${bizDatalist()}</datalist></div>
       <div><div class="ml">中文職稱</div><input class="ic" id="ev-title" value="${esc(v.title||'')}"></div>
       <div><div class="ml">close day</div><input type="date" class="ic" id="ev-close" value="${esc(v.close_day||'')}"></div>
       <div><div class="ml">報到日</div><input type="date" class="ic" id="ev-onboard" value="${esc(v.onboard_day||'')}"></div>
@@ -2039,13 +2039,18 @@ async function saveOneVac(vi){
   console.error('[saveOneVac]',msg);
   alert(msg);
 }
+// 「事業」既有值清單（讓欄位可下拉選既有值，也能自行打字）
+function bizDatalist(){
+  const vals=[...new Set((S.vacancies||[]).map(v=>v.biz).filter(Boolean))].sort();
+  return vals.map(b=>`<option value="${esc(b)}">`).join('');
+}
 function openAddVac(){openMdl('新增關缺',`
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
     <div><div class="ml">部門</div><input class="ic" id="nv-dept" list="nv-dept-dl" placeholder="選擇或自行輸入"><datalist id="nv-dept-dl">${['AI技術應用組','工程部','行銷運營部','業務部'].map(d=>`<option value="${d}">`).join('')}</datalist></div>
     <div><div class="ml">職能</div><input class="ic" id="nv-func" placeholder="後端工程組"></div>
     <div><div class="ml">職等</div><input class="ic" id="nv-level" placeholder="G3 / G5"></div>
     <div><div class="ml">職級</div><input class="ic" id="nv-grade" placeholder="資深專員 / 主管"></div>
-    <div><div class="ml">事業</div><select class="ic" id="nv-biz">${vacFieldOptions('biz','')}</select></div>
+    <div><div class="ml">事業</div><input class="ic" id="nv-biz" list="nv-biz-dl" placeholder="選擇或自行輸入"><datalist id="nv-biz-dl">${bizDatalist()}</datalist></div>
     <div><div class="ml">中文職稱</div><input class="ic" id="nv-title" placeholder="資深行銷運營專員"></div>
     <div><div class="ml">close day</div><input type="date" class="ic" id="nv-close"></div>
     <div><div class="ml">報到日</div><input type="date" class="ic" id="nv-onboard"></div>
